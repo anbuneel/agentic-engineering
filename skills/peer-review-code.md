@@ -72,24 +72,19 @@ TEMP_DIR=$(python -c "import tempfile; print(tempfile.gettempdir())")
 
 Store the branch name, REVIEW_ID, and TEMP_DIR for the rest of the session.
 
-### Config Loading
+### Defaults
 
-Read `.paira/config.json` from the project root if it exists. Use these defaults for any missing fields:
-
-| Key | Default |
-|-----|---------|
+| Setting | Value |
+|---------|-------|
 | `baseBranch` | `"main"` |
 | `maxRounds` | `5` |
 | `qualityGates` | `["lint", "typecheck", "test", "build"]` |
 | Quality gate commands | `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` |
 | `pollTimeoutMin` | `8` |
-| `approvalMode` | `"prompt"` |
-
-**Config Trust Gate:** If `.paira/config.json` specifies quality gate commands that differ from the defaults above, present ALL non-default commands to the user for confirmation before executing any of them. This prevents arbitrary command execution from untrusted configs.
 
 ### Initialize State File
 
-Write the initial state to `${TEMP_DIR}/paira-state-${REVIEW_ID}.json`:
+Write the initial state to `${TEMP_DIR}/review-state-${REVIEW_ID}.json`:
 
 ```json
 {
@@ -182,7 +177,7 @@ Guard empty commits — check before committing:
 git diff --quiet
 ```
 - If exit code 0 (no changes), skip the commit.
-- If changes exist: `git add <specific changed files> && git commit -m "fix: pre-review fixes (paira)"`
+- If changes exist: `git add <specific changed files> && git commit -m "fix: pre-review fixes"`
 
 Update the state file.
 
@@ -329,7 +324,7 @@ Fix all `agree` and `partial` findings using Edit/Write tools directly.
 
 1. **Fix MUST FIX findings first.** Run quality gates. If gates pass:
    ```bash
-   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} must-fix findings (paira)")
+   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} must-fix findings")
    ```
    This commit is the **safe checkpoint**. Store the SHA.
 
@@ -343,7 +338,7 @@ Fix all `agree` and `partial` findings using Edit/Write tools directly.
 
 3. If SHOULD FIX gates PASS:
    ```bash
-   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} should-fix findings (paira)")
+   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} should-fix findings")
    ```
 
 Update state file after each commit.
