@@ -41,7 +41,7 @@ New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\agents\<file>.md' -Tar
 ## Skill Design Rules
 
 - Codex model inherited from `~/.codex/config.toml` — never hardcode `-m`
-- Use `-a never` with codex exec (read-only sandbox already prevents writes)
+- Do NOT use `-a` flag with `codex exec` — it's not supported on the exec subcommand (approvals default to never in non-interactive mode)
 - Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
 - Use Read/Write tools for file operations — never `cp`, `mv`, or shell redirects
 - Generate session IDs natively — no Bash calls for setup

@@ -261,7 +261,7 @@ Use `Bash` with `sleep 30` between iterations. Save new seen IDs to the state fi
 
 **Round 1:**
 ```bash
-codex exec -a never -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
+codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Capture `CODEX_SESSION_ID` from the output line that says `session id: <uuid>`. Save to state file.
@@ -273,7 +273,7 @@ codex exec resume "${CODEX_SESSION_ID}" -o "${REVIEW_DIR}/codex-round-${ROUND}-$
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
 
-**Note:** If `codex exec resume` fails (session expired or sandbox not inherited), fall back to a fresh `codex exec -a never -s read-only` with context about prior rounds in the prompt.
+**Note:** If `codex exec resume` fails (session expired or sandbox not inherited), fall back to a fresh `codex exec -s read-only` with context about prior rounds in the prompt.
 
 ### Step 2c: Consolidate
 
