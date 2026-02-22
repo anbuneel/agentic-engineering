@@ -16,16 +16,17 @@ When invoked, perform the following iterative review loop:
 Generate a unique ID to avoid conflicts with concurrent sessions:
 
 ```bash
-REVIEW_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python -c "import uuid; print(uuid.uuid4())" | tr '[:upper:]' '[:lower:]' | head -c 8)
+REVIEW_ID=$(python -c "import uuid; print(str(uuid.uuid4())[:8])")
+TEMP_DIR=$(python -c "import tempfile; print(tempfile.gettempdir())")
 ```
 
-Use this for all temp file paths: `/tmp/claude-plan-${REVIEW_ID}.md` and `/tmp/codex-review-${REVIEW_ID}.md`.
+Use these for all temp file paths: `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` and `${TEMP_DIR}/codex-review-${REVIEW_ID}.md`.
 
 ### Step 2: Capture the Plan
 
 Write the current plan to the session-scoped temporary file.
 
-1. Write the full plan content to `/tmp/claude-plan-${REVIEW_ID}.md`
+1. Write the full plan content to `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ### Step 3: Initial Review (Round 1)
@@ -34,10 +35,9 @@ Run Codex CLI in non-interactive, read-only mode:
 
 ```bash
 codex exec \
-  -m gpt-5.3-codex \
   -s read-only \
-  -o /tmp/codex-review-${REVIEW_ID}.md \
-  "Review the implementation plan in /tmp/claude-plan-${REVIEW_ID}.md. Focus on:
+  -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" \
+  "Review the implementation plan in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md. Focus on:
 1. Correctness - Will this plan achieve the stated goals?
 2. Risks - What could go wrong? Edge cases? Data loss?
 3. Missing steps - Is anything forgotten?
@@ -53,17 +53,18 @@ If changes are needed, end with exactly: VERDICT: REVISE"
 **Capture the Codex session ID** from the output line that says `session id: <uuid>`. Store this as `CODEX_SESSION_ID`. You MUST use this exact ID to resume in subsequent rounds (do NOT use `--last`).
 
 **Notes:**
-- Default model is `gpt-5.3-codex`. If the user passes a model argument (e.g., `/review-plan o4-mini`), use that instead.
+- Codex model and reasoning effort are inherited from `~/.codex/config.toml` — do not hardcode `-m` unless the user overrides.
 - `-s read-only` — Codex can read the codebase for context but cannot modify anything.
 - `-o` captures output to a file for reliable reading.
 
 ### Step 4: Read Review & Check Verdict
 
-1. Read `/tmp/codex-review-${REVIEW_ID}.md`
+1. Read `${TEMP_DIR}/codex-review-${REVIEW_ID}.md`
 2. Check the verdict:
-   - If **VERDICT: APPROVED** → go to Step 8 (Done)
+   - **Minimum 2 rounds required** — never exit before Round 2, so Codex always re-reviews revisions
+   - If round ≥ 2 AND **VERDICT: APPROVED** → go to Step 8 (Done)
    - If **VERDICT: REVISE** → go to Step 5 (Counter-Review)
-   - If no clear verdict but feedback is all positive / no actionable items → treat as approved
+   - If round ≥ 2 AND no clear verdict but feedback is all positive / no actionable items → treat as approved
    - If max rounds (5) reached → go to Step 8 with a note that max rounds hit
 
 ### Step 5: Counter-Review (THIS IS THE KEY DIFFERENCE)
@@ -123,7 +124,7 @@ If there are no `reject` or `defer` items, skip this step.
 ### Step 7: Revise & Re-submit
 
 1. **Revise the plan** — apply all `agree` and `partial` findings. Do NOT apply `reject` (user-confirmed) or `defer` items.
-2. Rewrite `/tmp/claude-plan-${REVIEW_ID}.md` with the revised plan.
+2. Rewrite `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` with the revised plan.
 3. Summarize revisions for the user:
 
 ```
@@ -140,8 +141,8 @@ If there are no `reject` or `defer` items, skip this step.
 4. Re-submit to Codex by resuming the existing session:
 
 ```bash
-codex exec resume ${CODEX_SESSION_ID} \
-  "I've revised the plan based on your feedback. The updated plan is in /tmp/claude-plan-${REVIEW_ID}.md.
+codex exec resume "${CODEX_SESSION_ID}" \
+  "I've revised the plan based on your feedback. The updated plan is in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md.
 
 Changes made:
 [List specific changes addressing each agreed/partial finding]
@@ -152,12 +153,12 @@ Findings I did NOT address (with rationale):
 Please re-review the updated plan. Focus on whether the revisions address your concerns and check for any new issues introduced by the changes.
 
 If the plan is now solid: VERDICT: APPROVED
-If more changes needed: VERDICT: REVISE" 2>&1 | tail -80
+If more changes needed: VERDICT: REVISE" > "${TEMP_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
 ```
 
-**Note:** `codex exec resume` does NOT support `-o`. Capture output from stdout instead.
+Read the FULL output file — do NOT truncate with `tail` or `head`.
 
-**If resume fails** (session expired), fall back to a fresh `codex exec` with context about prior rounds in the prompt.
+**If resume fails** (session expired), fall back to a fresh `codex exec -s read-only` with context about prior rounds in the prompt.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 
@@ -172,7 +173,7 @@ The artifact should contain:
 
 **Review ID:** {REVIEW_ID}
 **Date:** [date]
-**Model:** gpt-5.3-codex
+**Model:** [model from codex output]
 **Status:** [Approved after N round(s) | Max rounds reached — not fully approved]
 **Plan file:** [path to the plan that was reviewed, if applicable]
 
@@ -247,7 +248,6 @@ Present a summary to the user in the conversation:
 ## Plan Review Complete
 
 **Status:** Approved after N round(s)
-**Model:** gpt-5.3-codex
 **Artifact:** docs/reviews/plan-review-{REVIEW_ID}.md
 
 ### Review Summary
@@ -267,7 +267,6 @@ The plan has been reviewed by Codex and counter-reviewed by Claude. Ready for yo
 ## Plan Review Complete
 
 **Status:** Max rounds (5) reached — not fully approved
-**Model:** gpt-5.3-codex
 **Artifact:** docs/reviews/plan-review-{REVIEW_ID}.md
 
 ### Remaining Concerns
@@ -282,7 +281,7 @@ Codex still has concerns. Review the remaining items and decide whether to proce
 ### Step 10: Cleanup
 
 ```bash
-rm -f /tmp/claude-plan-${REVIEW_ID}.md /tmp/codex-review-${REVIEW_ID}.md
+python -c "import glob, os, tempfile; [os.remove(f) for f in glob.glob(os.path.join(tempfile.gettempdir(), f'*-${REVIEW_ID}*'))]"
 ```
 
 ## Rules
@@ -290,9 +289,9 @@ rm -f /tmp/claude-plan-${REVIEW_ID}.md /tmp/codex-review-${REVIEW_ID}.md
 - Claude **critically evaluates** Codex feedback before revising — this is counter-review, not compliance
 - Every Codex finding MUST get a disposition — no silent skipping
 - `reject` dispositions MUST go through the user decision gate — Claude cannot unilaterally ignore feedback
-- Default model is `gpt-5.3-codex`. Accept model override from user arguments
+- Codex model and reasoning effort are inherited from `~/.codex/config.toml` — do not hardcode `-m` unless the user overrides
 - Always use read-only sandbox mode (`-s read-only`) — Codex should never write files
-- Max 5 review rounds to prevent infinite loops
+- Minimum 2 rounds (review + re-review), max 5 to prevent infinite loops
 - Show the user each round's counter-review and revisions so they can follow along
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If a revision contradicts the user's explicit requirements, flag it as `reject` with rationale
