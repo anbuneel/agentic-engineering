@@ -159,19 +159,24 @@ If there are no `reject` or `defer` items, skip this step.
 
 Fix all `agree` and `partial` findings directly using Edit/Write tools. Do NOT spawn subprocesses.
 
-Run quality gates:
+Run quality gates as **separate standalone commands** (not chained):
+
 ```bash
-npm run lint && npx tsc --noEmit && npm test && npm run build
+npm run lint
+```
+```bash
+npx tsc --noEmit
+```
+```bash
+npm test
+```
+```bash
+npm run build
 ```
 
-If gates fail after fixing: stop and notify the user.
+If any gate fails: stop and notify the user.
 
-Guard empty commits — check before committing:
-```bash
-git diff --quiet
-```
-- If exit code 0 (no changes), skip the commit.
-- If changes exist: `git add <specific changed files> && git commit -m "fix: pre-review fixes"`
+Guard empty commits — check `git diff --quiet` first. If exit code 0 (no changes), skip the commit. If changes exist, run `git add` then `git commit` as separate commands.
 
 Update the state file.
 
@@ -181,7 +186,7 @@ Update the state file.
 
 Check if a PR already exists for this branch:
 ```bash
-gh pr view --json number 2>/dev/null
+gh pr view --json number
 ```
 
 - If PR exists: capture the PR number, reuse it.
@@ -245,7 +250,7 @@ Capture `CODEX_SESSION_ID` from the output line that says `session id: <uuid>`. 
 
 **Round 2+:**
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes since last round]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE" > "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
+codex exec resume "${CODEX_SESSION_ID}" -o "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" "Code has been updated. [summary of changes since last round]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
@@ -325,24 +330,14 @@ Fix all `agree` and `partial` findings using Edit/Write tools directly.
 
 **Commit ordering for safe rollback:**
 
-1. **Fix MUST FIX findings first.** Run quality gates. If gates pass:
-   ```bash
-   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} must-fix findings")
-   ```
-   This commit is the **safe checkpoint**. Store the SHA.
+1. **Fix MUST FIX findings first.** Run quality gates (each as a separate command). If gates pass, check `git diff --quiet`. If changes exist, run `git add` then `git commit` as separate commands with message `"fix: round ${ROUND} must-fix findings"`. This commit is the **safe checkpoint**. Store the SHA.
 
 2. **Fix SHOULD FIX findings.** Run quality gates. If gates FAIL:
-   - Revert cleanly to the MUST FIX checkpoint:
-     ```bash
-     git clean -fd && git checkout <must-fix-sha> -- .
-     ```
+   - Revert cleanly to the MUST FIX checkpoint using `git clean -fd` then `git checkout <must-fix-sha> -- .` as separate commands.
    - Move all SHOULD FIX findings to DEFER in the state file.
    - Skip the SHOULD FIX commit.
 
-3. If SHOULD FIX gates PASS:
-   ```bash
-   git diff --quiet || (git add <specific files> && git commit -m "fix: round ${ROUND} should-fix findings")
-   ```
+3. If SHOULD FIX gates PASS, check `git diff --quiet`. If changes exist, run `git add` then `git commit` as separate commands with message `"fix: round ${ROUND} should-fix findings"`.
 
 Update state file after each commit.
 

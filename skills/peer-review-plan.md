@@ -132,6 +132,7 @@ If there are no `reject` or `defer` items, skip this step.
 
 ```bash
 codex exec resume "${CODEX_SESSION_ID}" \
+  -o "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" \
   "I've revised the plan based on your feedback. The updated plan is in ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md.
 
 Changes made:
@@ -143,7 +144,7 @@ Findings I did NOT address (with rationale):
 Please re-review the updated plan. Focus on whether the revisions address your concerns and check for any new issues introduced by the changes.
 
 If the plan is now solid: VERDICT: APPROVED
-If more changes needed: VERDICT: REVISE" > "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
+If more changes needed: VERDICT: REVISE"
 ```
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
