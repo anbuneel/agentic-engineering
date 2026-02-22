@@ -207,24 +207,32 @@ Loop for up to `maxRounds` rounds. At the **start of each round**, read the stat
 
 ### Step 2a: Wait Remote
 
-Poll ALL three GitHub comment endpoints for new comments. Use the owner/repo from `gh repo view --json owner,name`:
+Poll for new comments from remote agents. Resolve `{owner}` and `{repo}` once from `gh repo view --json owner,name`.
+
+**Polling approach:** Run each `gh api` call as a **separate standalone Bash command** — never combine into a shell script or loop. Claude manages the polling loop natively (check, wait, repeat) instead of writing a bash `for`/`while` loop.
+
+For each poll iteration, run these three commands individually:
 
 ```bash
 gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments"
+```
+```bash
 gh api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/reviews"
+```
+```bash
 gh api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments"
 ```
 
-Track seen comment IDs with namespace prefixes to avoid cross-endpoint collisions:
+Parse the JSON results natively. Track seen comment IDs with namespace prefixes to avoid cross-endpoint collisions:
 - `issues:{id}` — issue-level comments
 - `reviews:{id}` — PR review bodies
 - `pull_comments:{id}` — inline review comments
 
-Load seen IDs from the state file. Poll every ~30 seconds until:
+Load seen IDs from the state file. Repeat every ~30 seconds until:
 - New comments arrive from at least one agent, OR
 - Timeout after `pollTimeoutMin` minutes
 
-Save new seen IDs to the state file. Note which agents responded.
+Use `Bash` with `sleep 30` between iterations. Save new seen IDs to the state file. Note which agents responded.
 
 ### Step 2b: Codex Review
 
