@@ -97,6 +97,18 @@ Read and update this state file after every major step to guard against context 
 
 ---
 
+### Step 0b: Code Simplification
+
+Use the Task tool to launch the **code-simplifier** agent (`code-simplifier:code-simplifier`).
+
+Prompt: "Simplify and refine all changes on the current branch compared to the base branch. Focus on clarity, consistency, and maintainability while preserving exact functionality."
+
+Wait for the agent to complete. If it made changes, run quality gates (each as a separate command). If gates pass, commit with message `"refactor: code simplification pass"`. If gates fail, revert the simplification changes and notify the user.
+
+This runs before reviewers so they focus on real issues, not style or clarity problems.
+
+---
+
 ### Step 1: Pre-Review (Claude runs natively)
 
 Use the Task tool to launch pr-review-toolkit agents in parallel:
