@@ -312,8 +312,9 @@ Update dispositions in state file.
 ### Step 2e: Check Convergence
 
 Read the state file. Count findings by status:
-- If ALL `MUST FIX` findings are resolved AND no net new findings this round → **converged**, exit loop
-- If Codex verdict is `APPROVED` AND no unresolved `MUST FIX` → **converged**, exit loop
+- **Minimum 2 rounds required** — never exit before Round 2, so agents always re-review fixes
+- If round ≥ 2 AND ALL `MUST FIX` findings are resolved AND no net new findings this round → **converged**, exit loop
+- If round ≥ 2 AND Codex verdict is `APPROVED` AND no unresolved `MUST FIX` → **converged**, exit loop
 - If max rounds reached → exit loop with warning
 
 ### Step 2f: Fix
@@ -536,7 +537,7 @@ Review did not fully converge. Check remaining concerns before merging.
 - State file MUST be read and updated after every major step
 - Codex model and reasoning effort are inherited from `~/.codex/config.toml` — do not hardcode `-m` unless the user overrides
 - Always use read-only sandbox (`-s read-only`) for Codex — it should never write files
-- Max 5 review rounds to prevent infinite loops
+- Minimum 2 rounds (review + re-review), max 5 to prevent infinite loops
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If `gh auth status` fails, inform the user and suggest `gh auth login`
 - Claude fixes code directly via Edit/Write tools — NEVER spawn `claude -p` or any Claude subprocess
