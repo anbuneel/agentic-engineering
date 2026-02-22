@@ -288,3 +288,4 @@ rm -rf .review/
 - If a revision contradicts the user's explicit requirements, flag it as `reject` with rationale
 - Use Read/Write tools for all file operations — never use `cp`, `mv`, or shell redirects, as these trigger permission prompts
 - **Never use `cd` in Bash commands** — it creates compound commands that trigger manual approval. Use `-C <dir>` for codex and git commands, `--repo owner/repo` for gh commands. Run each command standalone, never chained with `cd &&`
+- **Never use `$()` command substitution or pipe to `jq`** — these trigger approval prompts. Run commands standalone and parse JSON output natively

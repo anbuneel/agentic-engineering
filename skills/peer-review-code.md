@@ -212,7 +212,13 @@ Loop for up to `maxRounds` rounds. At the **start of each round**, read the stat
 
 ### Step 2a: Wait Remote
 
-Poll for new comments from remote agents. Resolve `{owner}` and `{repo}` once from `gh repo view --json owner,name`.
+Poll for new comments from remote agents. Resolve `{owner}` and `{repo}` once by running:
+
+```bash
+gh repo view --json nameWithOwner
+```
+
+Parse the JSON result natively to extract owner and repo. Do NOT use `$()` substitution or pipe to `jq`.
 
 **Polling approach:** Run each `gh api` call as a **separate standalone Bash command** — never combine into a shell script or loop. Claude manages the polling loop natively (check, wait, repeat) instead of writing a bash `for`/`while` loop.
 
@@ -539,3 +545,4 @@ Review did not fully converge. Check remaining concerns before merging.
 - If `gh auth status` fails, inform the user and suggest `gh auth login`
 - Claude fixes code directly via Edit/Write tools — NEVER spawn `claude -p` or any Claude subprocess
 - **Never use `cd` in Bash commands** — it creates compound commands that trigger manual approval. Use `-C <dir>` for codex and git commands, `--repo owner/repo` for gh commands. Run each command standalone, never chained with `cd &&`
+- **Never use `$()` command substitution or pipe to `jq`** — these trigger approval prompts. Run commands standalone and parse JSON output natively
