@@ -286,3 +286,4 @@ python -c "import glob, os, tempfile; [os.remove(f) for f in glob.glob(os.path.j
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If a revision contradicts the user's explicit requirements, flag it as `reject` with rationale
 - Use Read/Write tools for all file operations — never use `cp`, `mv`, or shell redirects, as these trigger permission prompts
+- Never use `cd` in Bash commands — it creates compound commands that trigger manual approval. Use codex's `-C <dir>` flag to set the working directory instead
