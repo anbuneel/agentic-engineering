@@ -35,6 +35,7 @@ Run Codex CLI in non-interactive, read-only mode:
 
 ```bash
 codex exec \
+  -a never \
   -s read-only \
   -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" \
   "Review the implementation plan in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md. Focus on:
@@ -158,7 +159,7 @@ If more changes needed: VERDICT: REVISE" > "${TEMP_DIR}/codex-round-${ROUND}-${R
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
 
-**If resume fails** (session expired), fall back to a fresh `codex exec -s read-only` with context about prior rounds in the prompt.
+**If resume fails** (session expired), fall back to a fresh `codex exec -a never -s read-only` with context about prior rounds in the prompt.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 
