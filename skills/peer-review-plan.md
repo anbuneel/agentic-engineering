@@ -286,4 +286,4 @@ rm -rf .review/
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If a revision contradicts the user's explicit requirements, flag it as `reject` with rationale
 - Use Read/Write tools for all file operations — never use `cp`, `mv`, or shell redirects, as these trigger permission prompts
-- Never use `cd` in Bash commands — it creates compound commands that trigger manual approval. Use codex's `-C <dir>` flag to set the working directory instead
+- **Never use `cd` in Bash commands** — it creates compound commands that trigger manual approval. Use `-C <dir>` for codex and git commands, `--repo owner/repo` for gh commands. Run each command standalone, never chained with `cd &&`

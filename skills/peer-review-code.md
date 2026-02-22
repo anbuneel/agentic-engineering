@@ -535,4 +535,4 @@ Review did not fully converge. Check remaining concerns before merging.
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If `gh auth status` fails, inform the user and suggest `gh auth login`
 - Claude fixes code directly via Edit/Write tools — NEVER spawn `claude -p` or any Claude subprocess
-- Never use `cd` in Bash commands — it creates compound commands that trigger manual approval. Use codex's `-C <dir>` flag to set the working directory instead
+- **Never use `cd` in Bash commands** — it creates compound commands that trigger manual approval. Use `-C <dir>` for codex and git commands, `--repo owner/repo` for gh commands. Run each command standalone, never chained with `cd &&`
