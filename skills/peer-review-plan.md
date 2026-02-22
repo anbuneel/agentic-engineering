@@ -35,7 +35,7 @@ codex exec \
   -a never \
   -s read-only \
   -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" \
-  "Review the implementation plan in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md thoroughly. Number each finding clearly (1, 2, 3...).
+  "Review this plan thoroughly: ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md
 
 End with exactly: VERDICT: APPROVED or VERDICT: REVISE"
 ```
