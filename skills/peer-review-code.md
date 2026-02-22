@@ -60,15 +60,9 @@ gh auth status
 codex --version
 ```
 
-Generate a session ID:
-```bash
-REVIEW_ID=$(python -c "import uuid; print(str(uuid.uuid4())[:8])")
-```
+Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
 
-Resolve the cross-platform temp directory:
-```bash
-TEMP_DIR=$(python -c "import tempfile; print(tempfile.gettempdir())")
-```
+Resolve the temp directory: on Windows use `$TEMP` or `$TMP` env var, on Linux/macOS use `/tmp`. Store as `TEMP_DIR`.
 
 Store the branch name, REVIEW_ID, and TEMP_DIR for the rest of the session.
 

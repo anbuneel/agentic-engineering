@@ -13,12 +13,9 @@ When invoked, perform the following iterative review loop:
 
 ### Step 1: Generate Session ID
 
-Generate a unique ID to avoid conflicts with concurrent sessions:
+Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
 
-```bash
-REVIEW_ID=$(python -c "import uuid; print(str(uuid.uuid4())[:8])")
-TEMP_DIR=$(python -c "import tempfile; print(tempfile.gettempdir())")
-```
+Resolve the temp directory: on Windows use `$TEMP` or `$TMP` env var, on Linux/macOS use `/tmp`. Store as `TEMP_DIR`.
 
 Use these for all temp file paths: `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` and `${TEMP_DIR}/codex-review-${REVIEW_ID}.md`.
 
