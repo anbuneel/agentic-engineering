@@ -55,7 +55,7 @@ Create or update the file `docs/code-cleanup-analysis-claude.md` with:
 ```markdown
 # Code Cleanup Analysis
 
-**Author:** Claude (Opus 4)
+**Author:** Claude
 **Date:** [YYYY-MM-DD HH:MM]
 **Scope:** [Full codebase / Specific area]
 

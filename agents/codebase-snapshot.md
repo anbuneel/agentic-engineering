@@ -52,7 +52,7 @@ This document tracks the evolution of the codebase over time.
 
 ## Snapshot: [DATE] at [TIME]
 
-**Author:** Claude (Opus 4)
+**Author:** Claude
 **Captured:** [Full timestamp in ISO format]
 
 ### Architecture Overview
