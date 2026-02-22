@@ -35,17 +35,9 @@ codex exec \
   -a never \
   -s read-only \
   -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" \
-  "Review the implementation plan in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md. Focus on:
-1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
+  "Review the implementation plan in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md thoroughly. Number each finding clearly (1, 2, 3...).
 
-Be specific and actionable. Number each finding clearly (1, 2, 3...).
-
-If the plan is solid and ready to implement, end your review with exactly: VERDICT: APPROVED
-If changes are needed, end with exactly: VERDICT: REVISE"
+End with exactly: VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 **Capture the Codex session ID** from the output line that says `session id: <uuid>`. Store this as `CODEX_SESSION_ID`. You MUST use this exact ID to resume in subsequent rounds (do NOT use `--last`).
