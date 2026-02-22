@@ -23,20 +23,29 @@ agents/          ← Sub-agents (invoked via Task tool)
 
 **To publish changes:**
 ```bash
-cd /c/anbs-dev/agentic-engg-skills && git add -A && git commit && git push
+cd /c/anbs-dev/agentic-engineering && git add -A && git commit && git push
 ```
 
 **If a hard link breaks** (tool deleted and recreated the file instead of editing in place), re-create it:
 ```powershell
-New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\commands\<file>.md' -Target 'C:\anbs-dev\agentic-engg-skills\skills\<file>.md'
-New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\agents\<file>.md' -Target 'C:\anbs-dev\agentic-engg-skills\agents\<file>.md'
+New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\commands\<file>.md' -Target 'C:\anbs-dev\agentic-engineering\skills\<file>.md'
+New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\agents\<file>.md' -Target 'C:\anbs-dev\agentic-engineering\agents\<file>.md'
 ```
 
 ## Key Patterns
 
 - **Counter-review**: Agent assigns dispositions (agree/partial/defer/reject) to every finding before acting
 - **Decision gate**: User breaks ties on reject AND defer — nothing silently ignored
-- **Convergence loop**: Code review runs max 5 rounds, exits early when all MUST FIX resolved
+- **Convergence loop**: Min 2 rounds (review + re-review), max 5. Exits when all MUST FIX resolved and fixes verified
+
+## Skill Design Rules
+
+- Codex model inherited from `~/.codex/config.toml` — never hardcode `-m`
+- Use `-a never` with codex exec (read-only sandbox already prevents writes)
+- Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
+- Use Read/Write tools for file operations — never `cp`, `mv`, or shell redirects
+- Generate session IDs natively — no Bash calls for setup
+- All temp paths use cross-platform resolution (`$TEMP`/`$TMP` on Windows, `/tmp` on Unix)
 
 ## Origin
 
