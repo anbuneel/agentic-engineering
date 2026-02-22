@@ -1,6 +1,6 @@
 # Codex Plan Review (Iterative with Counter-Review)
 
-Send the current implementation plan to OpenAI Codex CLI for adversarial review. Unlike a simple back-and-forth, Claude performs a **counter-review** on each round of Codex feedback — assigning dispositions (agree/partial/defer/reject) to every finding before revising. When Claude rejects a finding, the **user breaks the tie**. Max 5 rounds.
+Send the current implementation plan to OpenAI Codex CLI for peer review. Unlike a simple back-and-forth, Claude performs a **counter-review** on each round of Codex feedback — assigning dispositions (agree/partial/defer/reject) to every finding before revising. When Claude rejects a finding, the **user breaks the tie**. Max 5 rounds.
 
 ## When to Invoke
 
