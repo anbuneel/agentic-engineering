@@ -134,7 +134,7 @@ All three are optional. The skill continues with local Codex CLI review if none 
 ## Cross-Platform
 
 Skills work on Windows, macOS, and Linux:
-- Temp files stored in `.review/` inside the project root (gitignored) — avoids permission prompts
+- Temp files stored in `.review/` inside the project root — avoids permission prompts. The skill auto-creates this directory and adds it to `.gitignore` on first run
 - Session IDs generated natively — no shell dependencies
 - File operations use Read/Write tools instead of shell commands
 - Codex working directory set via `-C` flag instead of `cd` to avoid compound command approval

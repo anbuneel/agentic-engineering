@@ -15,7 +15,7 @@ When invoked, perform the following iterative review loop:
 
 Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
 
-Create a `.review/` directory in the project root for all temp files. Use this as `REVIEW_DIR`. This folder is gitignored so nothing leaks into commits, and writing inside the project avoids permission prompts.
+Create a `.review/` directory in the project root for all temp files. Use this as `REVIEW_DIR`. If `.review/` is not in the project's `.gitignore`, add it. Writing inside the project avoids permission prompts.
 
 Use these for all temp file paths: `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` and `${REVIEW_DIR}/codex-review-${REVIEW_ID}.md`.
 
