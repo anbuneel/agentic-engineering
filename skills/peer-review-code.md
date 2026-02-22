@@ -236,7 +236,7 @@ Save new seen IDs to the state file. Note which agents responded.
 
 **Round 1:**
 ```bash
-codex exec -m "gpt-5.3-codex xhigh" -s read-only -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
+codex exec -s read-only -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Capture `CODEX_SESSION_ID` from the output line that says `session id: <uuid>`. Save to state file.
@@ -248,7 +248,7 @@ codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of chan
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
 
-**Note:** If `codex exec resume` fails (session expired or sandbox not inherited), fall back to a fresh `codex exec -m "gpt-5.3-codex xhigh" -s read-only` with context about prior rounds in the prompt.
+**Note:** If `codex exec resume` fails (session expired or sandbox not inherited), fall back to a fresh `codex exec -s read-only` with context about prior rounds in the prompt.
 
 ### Step 2c: Consolidate
 
@@ -534,7 +534,7 @@ Review did not fully converge. Check remaining concerns before merging.
 - All bash variables MUST be quoted: `"${VAR}"` not `${VAR}`
 - PR bodies and comment bodies MUST use temp files with `-F body=@file` — never inline generated content in shell commands
 - State file MUST be read and updated after every major step
-- Default Codex model is `gpt-5.3-codex xhigh`. Accept model override from user arguments
+- Codex model and reasoning effort are inherited from `~/.codex/config.toml` — do not hardcode `-m` unless the user overrides
 - Always use read-only sandbox (`-s read-only`) for Codex — it should never write files
 - Max 5 review rounds to prevent infinite loops
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
