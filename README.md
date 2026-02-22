@@ -47,17 +47,41 @@ Code review runs in rounds (min 2, max 5). Each round: collect agent feedback �
 
 ## Install
 
-### Claude Code
+### Quick Install (macOS / Linux)
 
 ```bash
 git clone https://github.com/anbuneel/agentic-engineering.git
-# Skills → ~/.claude/commands/
+mkdir -p ~/.claude/commands ~/.claude/agents
 cp agentic-engineering/skills/*.md ~/.claude/commands/
-# Agents → ~/.claude/agents/
 cp agentic-engineering/agents/*.md ~/.claude/agents/
 ```
 
-Or install individually:
+**Want auto-sync?** Use hard links so edits in either location stay in sync:
+
+```bash
+git clone https://github.com/anbuneel/agentic-engineering.git
+mkdir -p ~/.claude/commands ~/.claude/agents
+ln agentic-engineering/skills/*.md ~/.claude/commands/
+ln agentic-engineering/agents/*.md ~/.claude/agents/
+```
+
+### Quick Install (Windows)
+
+```powershell
+git clone https://github.com/anbuneel/agentic-engineering.git
+Copy-Item agentic-engineering\skills\*.md ~\.claude\commands\
+Copy-Item agentic-engineering\agents\*.md ~\.claude\agents\
+```
+
+**Want auto-sync?** Use hard links:
+
+```powershell
+git clone https://github.com/anbuneel/agentic-engineering.git
+Get-ChildItem agentic-engineering\skills\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "~\.claude\commands\$($_.Name)" -Target $_.FullName }
+Get-ChildItem agentic-engineering\agents\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "~\.claude\agents\$($_.Name)" -Target $_.FullName }
+```
+
+### Install Individual Files
 
 ```bash
 # Skills
