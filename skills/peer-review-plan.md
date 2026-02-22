@@ -26,7 +26,7 @@ Use these for all temp file paths: `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` and
 
 Write the current plan to the session-scoped temporary file.
 
-1. Write the full plan content to `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md`
+1. Use the **Read** tool to read the plan file, then use the **Write** tool to write the content to `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md`. Do NOT use `cp` or Bash for file operations — Read/Write tools avoid permission prompts.
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ### Step 3: Initial Review (Round 1)
@@ -296,3 +296,4 @@ python -c "import glob, os, tempfile; [os.remove(f) for f in glob.glob(os.path.j
 - Show the user each round's counter-review and revisions so they can follow along
 - If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If a revision contradicts the user's explicit requirements, flag it as `reject` with rationale
+- Use Read/Write tools for all file operations — never use `cp`, `mv`, or shell redirects, as these trigger permission prompts
