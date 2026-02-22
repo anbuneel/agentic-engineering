@@ -222,19 +222,19 @@ Parse the JSON result natively to extract owner and repo. Do NOT use `$()` subst
 
 **Polling approach:** Run each `gh api` call as a **separate standalone Bash command** — never combine into a shell script or loop. Claude manages the polling loop natively (check, wait, repeat) instead of writing a bash `for`/`while` loop.
 
-For each poll iteration, run these three commands individually:
+For each poll iteration, run these three commands individually. Use **exactly** these forms — no `--jq`, no `2>/dev/null`, no `cd`, no `--paginate`:
 
 ```bash
-gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments"
+gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments
 ```
 ```bash
-gh api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/reviews"
+gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
 ```
 ```bash
-gh api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments"
+gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
 ```
 
-Parse the JSON results natively. Track seen comment IDs with namespace prefixes to avoid cross-endpoint collisions:
+Parse the full JSON results natively to extract comments, filter by agent username, and track IDs. Track seen comment IDs with namespace prefixes to avoid cross-endpoint collisions:
 - `issues:{id}` — issue-level comments
 - `reviews:{id}` — PR review bodies
 - `pull_comments:{id}` — inline review comments
