@@ -43,7 +43,7 @@ When the agent rejects or defers a finding, **you break the tie**. No feedback i
 
 ### Convergence Loop
 
-Code review runs in rounds (max 5). Each round: collect agent feedback → counter-review → fix → push → repeat. Exits early when all critical findings are resolved.
+Code review runs in rounds (min 2, max 5). Each round: collect agent feedback → counter-review → fix → push → repeat. Requires at least one re-review round to verify fixes before converging.
 
 ## Install
 
@@ -84,6 +84,13 @@ These are markdown files — any AI agent that can read instructions and execute
 - [GitHub CLI (`gh`)](https://cli.github.com/) — authenticated (`gh auth login`)
 - [Codex CLI](https://github.com/openai/codex) — `npm install -g @openai/codex`
 
+**Codex configuration:** Model and reasoning effort are inherited from `~/.codex/config.toml` — the skills do not hardcode a model. Configure your preferred model there:
+
+```toml
+model = "gpt-5.3-codex"
+model_reasoning_effort = "xhigh"
+```
+
 **GitHub Apps (optional, for multi-agent coverage):**
 1. [Claude bot](https://github.com/apps/claude) — automatic PR review
 2. [Devin](https://github.com/apps/devin-ai-integration) — automatic PR review
@@ -99,6 +106,14 @@ All three are optional. The skill continues with local Codex CLI review if none 
 
 - Git
 - [GitHub CLI (`gh`)](https://cli.github.com/)
+
+## Cross-Platform
+
+Skills work on Windows, macOS, and Linux:
+- Temp directory resolved via `$TEMP`/`$TMP` (Windows) or `/tmp` (Unix)
+- Session IDs generated natively — no shell dependencies
+- File operations use Read/Write tools instead of shell commands to avoid permission prompts
+- Codex working directory set via `-C` flag instead of `cd` to avoid compound command approval
 
 ## Origin
 
