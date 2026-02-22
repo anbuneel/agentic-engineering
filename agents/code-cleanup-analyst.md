@@ -125,9 +125,6 @@ Items that appeared unused but have legitimate purposes.
 5. **Document findings** with clear reasoning and confidence levels
 6. **Prioritize** by impact (larger files/more complex removals first)
 
-## Windows Development Note
-This project is developed on Windows. Use appropriate path separators and be mindful of case sensitivity in file references.
-
 ## Quality Standards
 - Every removal recommendation must include verification steps
 - Confidence levels must be honest (don't overstate certainty)
