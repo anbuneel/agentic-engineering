@@ -397,11 +397,13 @@ git merge-base HEAD "origin/${BASE_BRANCH}"
 
 ### Step 2i: Push
 
+If rebased this round:
 ```bash
-# If rebased this round, use force-with-lease
 git push --force-with-lease origin "${BRANCH}"
+```
 
-# Otherwise, normal push
+Otherwise:
+```bash
 git push origin "${BRANCH}"
 ```
 
