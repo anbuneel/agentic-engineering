@@ -62,9 +62,9 @@ codex --version
 
 Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
 
-Resolve the temp directory: on Windows use `$TEMP` or `$TMP` env var, on Linux/macOS use `/tmp`. Store as `TEMP_DIR`.
+Create a `.review/` directory in the project root for all temp files. Use this as `REVIEW_DIR`. This folder is gitignored so nothing leaks into commits, and writing inside the project avoids permission prompts.
 
-Store the branch name, REVIEW_ID, and TEMP_DIR for the rest of the session.
+Store the branch name, REVIEW_ID, and REVIEW_DIR for the rest of the session.
 
 ### Defaults
 
@@ -78,7 +78,7 @@ Store the branch name, REVIEW_ID, and TEMP_DIR for the rest of the session.
 
 ### Initialize State File
 
-Write the initial state to `${TEMP_DIR}/review-state-${REVIEW_ID}.json`:
+Write the initial state to `${REVIEW_DIR}/review-state-${REVIEW_ID}.json`:
 
 ```json
 {
@@ -190,10 +190,10 @@ gh pr view --json number 2>/dev/null
      ```bash
      git push -u origin "${BRANCH}"
      ```
-  2. Write PR body to temp file: `${TEMP_DIR}/pr-body-${REVIEW_ID}.md`
+  2. Write PR body to temp file: `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`
   3. Create PR:
      ```bash
-     gh pr create --title "..." --body-file "${TEMP_DIR}/pr-body-${REVIEW_ID}.md"
+     gh pr create --title "..." --body-file "${REVIEW_DIR}/pr-body-${REVIEW_ID}.md"
      ```
   4. Capture PR number from output.
 
@@ -230,14 +230,14 @@ Save new seen IDs to the state file. Note which agents responded.
 
 **Round 1:**
 ```bash
-codex exec -a never -s read-only -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
+codex exec -a never -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Capture `CODEX_SESSION_ID` from the output line that says `session id: <uuid>`. Save to state file.
 
 **Round 2+:**
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes since last round]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE" > "${TEMP_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
+codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes since last round]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE" > "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
 ```
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
@@ -343,7 +343,7 @@ Update state file after each commit.
 Write the round summary to a temp file, then post to the PR:
 
 ```bash
-gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${TEMP_DIR}/round-summary-${REVIEW_ID}.md"
+gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/round-summary-${REVIEW_ID}.md"
 ```
 
 Using `-F body=@file` avoids shell injection from generated content.
@@ -400,7 +400,7 @@ Update state file.
 
 For each finding with disposition `defer`, create a GitHub issue:
 ```bash
-gh issue create --title "..." --body-file "${TEMP_DIR}/defer-issue-${REVIEW_ID}.md"
+gh issue create --title "..." --body-file "${REVIEW_DIR}/defer-issue-${REVIEW_ID}.md"
 ```
 
 Write the issue body to a temp file first to avoid shell injection.
@@ -409,14 +409,14 @@ Write the issue body to a temp file first to avoid shell injection.
 
 Write the final PR body to a temp file, then:
 ```bash
-gh pr edit "${PR_NUMBER}" --body-file "${TEMP_DIR}/pr-final-body-${REVIEW_ID}.md"
+gh pr edit "${PR_NUMBER}" --body-file "${REVIEW_DIR}/pr-final-body-${REVIEW_ID}.md"
 ```
 
 #### Post Final Summary Comment
 
 Write summary to temp file, post via:
 ```bash
-gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${TEMP_DIR}/final-summary-${REVIEW_ID}.md"
+gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/final-summary-${REVIEW_ID}.md"
 ```
 
 #### Write Review Artifact
@@ -475,7 +475,7 @@ If `docs/reviews/` does not exist, create it.
 #### Cleanup Temp Files
 
 ```bash
-python -c "import glob, os, tempfile; [os.remove(f) for f in glob.glob(os.path.join(tempfile.gettempdir(), f'*-${REVIEW_ID}*'))]"
+rm -rf .review/
 ```
 
 ### Step 4: Present Final Result

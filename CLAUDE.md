@@ -45,7 +45,7 @@ New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\agents\<file>.md' -Tar
 - Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
 - Use Read/Write tools for file operations — never `cp`, `mv`, or shell redirects
 - Generate session IDs natively — no Bash calls for setup
-- All temp paths use cross-platform resolution (`$TEMP`/`$TMP` on Windows, `/tmp` on Unix)
+- All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
 
 ## Origin
 

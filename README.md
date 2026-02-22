@@ -134,9 +134,9 @@ All three are optional. The skill continues with local Codex CLI review if none 
 ## Cross-Platform
 
 Skills work on Windows, macOS, and Linux:
-- Temp directory resolved via `$TEMP`/`$TMP` (Windows) or `/tmp` (Unix)
+- Temp files stored in `.review/` inside the project root (gitignored) — avoids permission prompts
 - Session IDs generated natively — no shell dependencies
-- File operations use Read/Write tools instead of shell commands to avoid permission prompts
+- File operations use Read/Write tools instead of shell commands
 - Codex working directory set via `-C` flag instead of `cd` to avoid compound command approval
 
 ## Origin

@@ -15,15 +15,15 @@ When invoked, perform the following iterative review loop:
 
 Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
 
-Resolve the temp directory: on Windows use `$TEMP` or `$TMP` env var, on Linux/macOS use `/tmp`. Store as `TEMP_DIR`.
+Create a `.review/` directory in the project root for all temp files. Use this as `REVIEW_DIR`. This folder is gitignored so nothing leaks into commits, and writing inside the project avoids permission prompts.
 
-Use these for all temp file paths: `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` and `${TEMP_DIR}/codex-review-${REVIEW_ID}.md`.
+Use these for all temp file paths: `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` and `${REVIEW_DIR}/codex-review-${REVIEW_ID}.md`.
 
 ### Step 2: Capture the Plan
 
 Write the current plan to the session-scoped temporary file.
 
-1. Use the **Read** tool to read the plan file, then use the **Write** tool to write the content to `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md`. Do NOT use `cp` or Bash for file operations — Read/Write tools avoid permission prompts.
+1. Use the **Read** tool to read the plan file, then use the **Write** tool to write the content to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md`. Do NOT use `cp` or Bash for file operations — Read/Write tools avoid permission prompts.
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ### Step 3: Initial Review (Round 1)
@@ -34,8 +34,8 @@ Run Codex CLI in non-interactive, read-only mode:
 codex exec \
   -a never \
   -s read-only \
-  -o "${TEMP_DIR}/codex-review-${REVIEW_ID}.md" \
-  "Review this plan thoroughly: ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md
+  -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" \
+  "Review this plan thoroughly: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md
 
 End with exactly: VERDICT: APPROVED or VERDICT: REVISE"
 ```
@@ -49,7 +49,7 @@ End with exactly: VERDICT: APPROVED or VERDICT: REVISE"
 
 ### Step 4: Read Review & Check Verdict
 
-1. Read `${TEMP_DIR}/codex-review-${REVIEW_ID}.md`
+1. Read `${REVIEW_DIR}/codex-review-${REVIEW_ID}.md`
 2. Check the verdict:
    - **Minimum 2 rounds required** — never exit before Round 2, so Codex always re-reviews revisions
    - If round ≥ 2 AND **VERDICT: APPROVED** → go to Step 8 (Done)
@@ -114,7 +114,7 @@ If there are no `reject` or `defer` items, skip this step.
 ### Step 7: Revise & Re-submit
 
 1. **Revise the plan** — apply all `agree` and `partial` findings. Do NOT apply `reject` (user-confirmed) or `defer` items.
-2. Rewrite `${TEMP_DIR}/claude-plan-${REVIEW_ID}.md` with the revised plan.
+2. Rewrite `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the revised plan.
 3. Summarize revisions for the user:
 
 ```
@@ -132,7 +132,7 @@ If there are no `reject` or `defer` items, skip this step.
 
 ```bash
 codex exec resume "${CODEX_SESSION_ID}" \
-  "I've revised the plan based on your feedback. The updated plan is in ${TEMP_DIR}/claude-plan-${REVIEW_ID}.md.
+  "I've revised the plan based on your feedback. The updated plan is in ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md.
 
 Changes made:
 [List specific changes addressing each agreed/partial finding]
@@ -143,7 +143,7 @@ Findings I did NOT address (with rationale):
 Please re-review the updated plan. Focus on whether the revisions address your concerns and check for any new issues introduced by the changes.
 
 If the plan is now solid: VERDICT: APPROVED
-If more changes needed: VERDICT: REVISE" > "${TEMP_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
+If more changes needed: VERDICT: REVISE" > "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" 2>&1
 ```
 
 Read the FULL output file — do NOT truncate with `tail` or `head`.
@@ -271,7 +271,7 @@ Codex still has concerns. Review the remaining items and decide whether to proce
 ### Step 10: Cleanup
 
 ```bash
-python -c "import glob, os, tempfile; [os.remove(f) for f in glob.glob(os.path.join(tempfile.gettempdir(), f'*-${REVIEW_ID}*'))]"
+rm -rf .review/
 ```
 
 ## Rules
