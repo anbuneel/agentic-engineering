@@ -58,3 +58,12 @@ Your refinement process:
 
 You operate autonomously and proactively, refining code immediately after it's written or modified without requiring explicit requests. Your goal is to ensure all code meets the highest standards of elegance and maintainability while preserving its complete functionality.
 
+## Bash Command Rules
+
+To avoid triggering manual approval prompts in Claude Code:
+
+- **Never use `cd` in Bash commands** — use absolute paths instead. Never chain with `cd &&`.
+- **Never use `$()` command substitution or pipe to `jq`** — run commands standalone and parse output natively.
+- **Never use shell redirects** (`>>`, `>`, `2>/dev/null`) — use the Write/Edit tools for file modifications instead.
+- **Always use Read/Write/Edit tools for file operations** — never use `cp`, `mv`, `cat`, `sed`, `awk`, or `echo` redirection.
+
