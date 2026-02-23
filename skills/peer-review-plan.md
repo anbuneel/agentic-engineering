@@ -130,9 +130,7 @@ If there are no `reject` or `defer` items, skip this step.
 4. Re-submit to Codex by resuming the existing session:
 
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" \
-  -o "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md" \
-  "I've revised the plan based on your feedback. The updated plan is in ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md.
+codex exec resume "${CODEX_SESSION_ID}" "I've revised the plan based on your feedback. The updated plan is in ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md.
 
 Changes made:
 [List specific changes addressing each agreed/partial finding]
@@ -146,9 +144,9 @@ If the plan is now solid: VERDICT: APPROVED
 If more changes needed: VERDICT: REVISE"
 ```
 
-Read the FULL output file — do NOT truncate with `tail` or `head`.
+The resume output goes to stdout — capture it from the Bash tool result. Do NOT truncate with `tail` or `head`.
 
-**If resume fails** (session expired), fall back to a fresh `codex exec -s read-only` with context about prior rounds in the prompt.
+**If resume fails** (session expired), fall back to a fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md"` with context about prior rounds in the prompt.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 
