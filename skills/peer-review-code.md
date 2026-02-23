@@ -1,6 +1,6 @@
 # Peer Review Code (Multi-Agent with Counter-Review)
 
-Orchestrate an automated code review across multiple AI agents (Codex CLI, GitHub-connected bots) with Claude as the central coordinator. Claude performs a **counter-review** on every finding — assigning dispositions (agree/partial/defer/reject) before fixing. When Claude rejects a finding, the **user breaks the tie**. Max 5 rounds.
+Orchestrate an automated code review across multiple AI agents (Codex CLI, GitHub-connected bots) with Claude as the central coordinator. Claude performs a **counter-review** on every finding — assigning dispositions (agree/partial/defer/reject) before fixing. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
 
 ## When to Invoke
 
@@ -9,22 +9,7 @@ Orchestrate an automated code review across multiple AI agents (Codex CLI, GitHu
 
 ## Prerequisites
 
-The following must be set up **before** running this skill:
-
-### Local Tools
-- **Git** — installed and configured
-- **GitHub CLI (`gh`)** — installed and authenticated (`gh auth login`)
-- **Codex CLI** — installed (`npm install -g @openai/codex`)
-
-### GitHub Remote Agents
-
-The review loop polls the PR for comments from remote agents. For agents to respond automatically, they must be installed on the GitHub repo:
-
-1. **Claude bot** — Install the [Claude GitHub App](https://github.com/apps/claude) on your repo. It will automatically review new PRs.
-2. **Devin** — Install the [Devin GitHub App](https://github.com/apps/devin-ai-integration) on your repo. Assign Devin as a reviewer or configure auto-review in Devin's dashboard.
-3. **Codex GH Connector** — Install the [OpenAI Codex GitHub App](https://github.com/apps/openai-codex) on your repo. It will automatically review new PRs.
-
-**Note:** All three are optional. The Wait Remote step will poll for whatever agents respond within the timeout. If none respond, the round continues with just the local Codex CLI review. The more agents installed, the more diverse the feedback.
+Requires **git**, **gh** (authenticated), and **codex CLI**. For remote agent reviews (Claude bot, Devin, Codex GH), install their GitHub Apps on your repo — see README for setup.
 
 ---
 
@@ -38,7 +23,7 @@ When invoked, execute the following phases sequentially.
 
 ### Step 0: Preflight
 
-Run ALL of these checks. If any fail, stop and tell the user what's wrong.
+Run ALL checks — stop if any fail:
 
 ```bash
 git rev-parse --is-inside-work-tree
@@ -46,12 +31,12 @@ git rev-parse --is-inside-work-tree
 ```bash
 git status --porcelain
 ```
-- If output is non-empty, stop: "Working tree is not clean. Commit or stash changes first."
+- Non-empty → stop: "Working tree is not clean. Commit or stash changes first."
 
 ```bash
 git rev-parse --abbrev-ref HEAD
 ```
-- If branch is `main` or `master`, stop: "Cannot review the main branch. Switch to a feature branch."
+- `main` or `master` → stop: "Switch to a feature branch."
 
 ```bash
 gh auth status
@@ -60,38 +45,11 @@ gh auth status
 codex --version
 ```
 
-Generate a random 8-character hex string natively (do NOT use Bash for this). Store as `REVIEW_ID`.
+Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 
-Create a `.review/` directory in the project root for all temp files. Use this as `REVIEW_DIR`. If `.review/` is not in the project's `.gitignore`, add it. Writing inside the project avoids permission prompts.
+Create `.review/` in the project root. Add to `.gitignore` if missing. Use as `REVIEW_DIR`.
 
-Store the branch name, REVIEW_ID, and REVIEW_DIR for the rest of the session.
-
-### Defaults
-
-| Setting | Value |
-|---------|-------|
-| `baseBranch` | `"main"` |
-| `maxRounds` | `5` |
-| `qualityGates` | `["lint", "typecheck", "test", "build"]` |
-| Quality gate commands | `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` |
-| `pollTimeoutMin` | `8` |
-
-### Initialize State File
-
-Write the initial state to `${REVIEW_DIR}/review-state-${REVIEW_ID}.json`:
-
-```json
-{
-  "reviewId": "<REVIEW_ID>",
-  "round": 0,
-  "codexSessionId": null,
-  "prNumber": null,
-  "seenCommentIds": [],
-  "findings": [],
-  "dispositions": [],
-  "rebasedThisRound": false
-}
-```
+Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, codexSessionId, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
 
 Read and update this state file after every major step to guard against context compression.
 
@@ -99,35 +57,31 @@ Read and update this state file after every major step to guard against context 
 
 ### Step 0b: Code Simplification
 
-Use the Task tool to launch the **code-simplifier** agent (`code-simplifier:code-simplifier`).
+Launch **code-simplifier** agent (`code-simplifier:code-simplifier`): "Simplify and refine all changes on the current branch compared to the base branch. Focus on clarity, consistency, and maintainability while preserving exact functionality."
 
-Prompt: "Simplify and refine all changes on the current branch compared to the base branch. Focus on clarity, consistency, and maintainability while preserving exact functionality."
-
-Wait for the agent to complete. If it made changes, run quality gates (each as a separate command). If gates pass, commit with message `"refactor: code simplification pass"`. If gates fail, revert the simplification changes and notify the user.
-
-This runs before reviewers so they focus on real issues, not style or clarity problems.
+If changes made: run quality gates (lint, typecheck, test, build — each as a separate command). If pass, commit `"refactor: code simplification pass"`. If fail, revert and notify user.
 
 ---
 
 ### Step 1: Pre-Review (Claude runs natively)
 
-Use the Task tool to launch pr-review-toolkit agents in parallel:
+Launch pr-review-toolkit agents in parallel:
 
-1. **code-reviewer** — `pr-review-toolkit:code-reviewer`
-2. **silent-failure-hunter** — `pr-review-toolkit:silent-failure-hunter`
-3. **type-design-analyzer** — `pr-review-toolkit:type-design-analyzer`
+1. `pr-review-toolkit:code-reviewer`
+2. `pr-review-toolkit:silent-failure-hunter`
+3. `pr-review-toolkit:type-design-analyzer`
 
-Prompt each agent: "Review all unstaged and staged changes on the current branch compared to the base branch. Report findings with severity (MUST FIX / SHOULD FIX / CONSIDER) and specific file:line references."
+Prompt each: "Review all changes on the current branch compared to the base branch. Report findings with severity (MUST FIX / SHOULD FIX / CONSIDER) and file:line references."
 
 #### Counter-Review (Pre-Review)
 
-Evaluate every finding from the agents. Assign dispositions:
+Evaluate every finding. Assign dispositions:
 
 | Disposition | Meaning | Action |
 |-------------|---------|--------|
 | **agree** | Valid, will fix | Fix it now |
-| **partial** | Valid but scoped down | Fix the core issue, note what's deferred |
-| **defer** | Valid but not now | Log it for later |
+| **partial** | Valid but scoped down | Fix core issue, defer rest |
+| **defer** | Valid but not now | Log for later |
 | **reject** | Disagree | Must include rationale |
 
 Present the counter-review table to the user:
@@ -143,98 +97,48 @@ Present the counter-review table to the user:
 
 #### Decision Gate (Pre-Review)
 
-If there are any **reject** or **defer** dispositions, present them to the user:
+If there are **reject** or **defer** dispositions, present each to the user with both sides' arguments. Wait for their call. If user sides with agent → `agree`. If user confirms defer → keep.
 
-```
-### Disputed Findings
-
-[For each reject:]
-1. **[Finding summary]**
-   - Agent says: [argument]
-   - Claude says: [counter-argument]
-   - **Your call: side with agent (fix) or Claude (skip)?**
-
-### Deferred Findings
-
-[For each defer:]
-2. **[Finding summary]**
-   - Agent says: [argument]
-   - Claude says: [why deferring]
-   - **OK to defer, or override to fix now?**
-```
-
-Wait for user response on each item. For rejects: if user sides with the agent, move to `agree`. For defers: if user overrides, move to `agree` (fix now).
-
-If there are no `reject` or `defer` items, skip this step.
+Skip if no reject/defer items.
 
 #### Fix Pre-Review Findings
 
-Fix all `agree` and `partial` findings directly using Edit/Write tools. Do NOT spawn subprocesses.
+Fix all `agree` and `partial` findings using Edit/Write tools.
 
-Run quality gates as **separate standalone commands** (not chained):
+Run quality gates (lint, typecheck, test, build) — each as a separate command. If any fail, stop and notify user.
 
-```bash
-npm run lint
-```
-```bash
-npx tsc --noEmit
-```
-```bash
-npm test
-```
-```bash
-npm run build
-```
+Guard empty commits — `git diff --quiet` first. If changes exist, `git add` then `git commit` as separate commands.
 
-If any gate fails: stop and notify the user.
-
-Guard empty commits — check `git diff --quiet` first. If exit code 0 (no changes), skip the commit. If changes exist, run `git add` then `git commit` as separate commands.
-
-Update the state file.
+Update state file.
 
 ---
 
 ### Step 2: Create PR
 
-Check if a PR already exists for this branch:
 ```bash
 gh pr view --json number
 ```
 
-- If PR exists: capture the PR number, reuse it.
-- If no PR:
-  1. Push the branch:
-     ```bash
-     git push -u origin "${BRANCH}"
-     ```
-  2. Write PR body to temp file: `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`
-  3. Create PR:
-     ```bash
-     gh pr create --title "..." --body-file "${REVIEW_DIR}/pr-body-${REVIEW_ID}.md"
-     ```
-  4. Capture PR number from output.
+- PR exists → capture number, reuse.
+- No PR → push branch, write PR body to `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`, create with `gh pr create --body-file`, capture number.
 
-Update the state file with `prNumber`.
+Update state file.
 
 ---
 
 ## Phase B: Review Loop
 
-Loop for up to `maxRounds` rounds. At the **start of each round**, read the state file and set `rebasedThisRound: false`.
+Loop for up to 5 rounds. At round start, read state file, set `rebasedThisRound: false`.
 
 ### Step 2a: Wait Remote
 
-Poll for new comments from remote agents. Resolve `{owner}` and `{repo}` once by running:
+Resolve owner/repo once:
 
 ```bash
 gh repo view --json nameWithOwner
 ```
 
-Parse the JSON result natively to extract owner and repo. Do NOT use `$()` substitution or pipe to `jq`.
-
-**Polling approach:** Run each `gh api` call as a **separate standalone Bash command** — never combine into a shell script or loop. Claude manages the polling loop natively (check, wait, repeat) instead of writing a bash `for`/`while` loop.
-
-For each poll iteration, run these three commands individually. Use **exactly** these forms — no `--jq`, no `2>/dev/null`, no `cd`, no `--paginate`:
+Parse JSON natively. Poll these 3 endpoints every ~30 seconds as separate standalone commands:
 
 ```bash
 gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments
@@ -246,16 +150,7 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
 gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
 ```
 
-Parse the full JSON results natively to extract comments, filter by agent username, and track IDs. Track seen comment IDs with namespace prefixes to avoid cross-endpoint collisions:
-- `issues:{id}` — issue-level comments
-- `reviews:{id}` — PR review bodies
-- `pull_comments:{id}` — inline review comments
-
-Load seen IDs from the state file. Repeat every ~30 seconds until:
-- New comments arrive from at least one agent, OR
-- Timeout after `pollTimeoutMin` minutes
-
-Use `Bash` with `sleep 30` between iterations. Save new seen IDs to the state file. Note which agents responded.
+Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout (8 minutes). Save to state file.
 
 ### Step 2b: Codex Review
 
@@ -264,38 +159,26 @@ Use `Bash` with `sleep 30` between iterations. Save new seen IDs to the state fi
 codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Capture `CODEX_SESSION_ID` from the output line that says `session id: <uuid>`. Save to state file.
+Capture `CODEX_SESSION_ID` from output. Save to state file.
 
 **Round 2+:**
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes since last round]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-The resume output goes to stdout — capture it from the Bash tool result. Do NOT truncate with `tail` or `head`.
+Resume output goes to stdout — capture from Bash tool result.
 
-**Note:** If `codex exec resume` fails (session expired or sandbox not inherited), fall back to a fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with context about prior rounds in the prompt.
+**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context.
 
 ### Step 2c: Consolidate
 
-Read ALL collected inputs:
-- Remote comments from all three endpoints (only new ones)
-- Codex output from the round file (full, not truncated)
-
-Claude parses the findings natively — no deterministic parser needed. For each finding, extract:
-- **File** and line reference
-- **Severity** (MUST FIX / SHOULD FIX / CONSIDER)
-- **Description** of the issue
-- **Source agent**
-
-Deduplicate across agents using fingerprints: `file:severity:keywords`. Check against existing findings in the state file.
-
-Update the state file with new findings.
+Extract findings from all sources (remote comments + Codex output). For each: file, line, severity, description, source agent. Deduplicate using `file:severity:keywords` fingerprints. Update state file.
 
 ### Step 2d: Counter-Review
 
 Evaluate every NEW finding. Assign dispositions (agree/partial/defer/reject).
 
-Present the counter-review table to the user:
+Present the counter-review table:
 
 ```
 ## Counter-Review — Round N
@@ -308,106 +191,49 @@ Present the counter-review table to the user:
 
 #### Decision Gate
 
-If there are any **reject** or **defer** dispositions, present them to the user:
-
-```
-### Disputed Findings
-
-[For each reject:]
-1. **[Finding summary]**
-   - Agent says: [argument]
-   - Claude says: [counter-argument]
-   - **Your call: side with agent (fix) or Claude (skip)?**
-
-### Deferred Findings
-
-[For each defer:]
-2. **[Finding summary]**
-   - Agent says: [argument]
-   - Claude says: [why deferring]
-   - **OK to defer, or override to fix now?**
-```
-
-Wait for user response on each item. For rejects: if user sides with the agent, move to `agree`. For defers: if user overrides, move to `agree` (fix now).
-
-If there are no `reject` or `defer` items, skip this step.
+If there are **reject** or **defer** dispositions, present each to the user with both sides' arguments. Wait for their call. Skip if none.
 
 Update dispositions in state file.
 
 ### Step 2e: Check Convergence
 
-Read the state file. Count findings by status:
-- **Minimum 2 rounds required** — never exit before Round 2, so agents always re-review fixes
-- If round ≥ 2 AND ALL `MUST FIX` findings are resolved AND no net new findings this round → **converged**, exit loop
-- If round ≥ 2 AND Codex verdict is `APPROVED` AND no unresolved `MUST FIX` → **converged**, exit loop
-- If max rounds reached → exit loop with warning
+- **Minimum 2 rounds required** — never exit before Round 2
+- Round ≥ 2 AND all MUST FIX resolved AND no net new findings → **converged**
+- Round ≥ 2 AND Codex APPROVED AND no unresolved MUST FIX → **converged**
+- Max rounds → exit with warning
 
 ### Step 2f: Fix
 
-Fix all `agree` and `partial` findings using Edit/Write tools directly.
+Fix all `agree` and `partial` findings using Edit/Write tools.
 
-**Commit ordering for safe rollback:**
+**Commit MUST FIX first** (safe checkpoint). Run quality gates (each as a separate command). If pass and changes exist, commit `"fix: round ${ROUND} must-fix findings"`. Store SHA.
 
-1. **Fix MUST FIX findings first.** Run quality gates (each as a separate command). If gates pass, check `git diff --quiet`. If changes exist, run `git add` then `git commit` as separate commands with message `"fix: round ${ROUND} must-fix findings"`. This commit is the **safe checkpoint**. Store the SHA.
-
-2. **Fix SHOULD FIX findings.** Run quality gates. If gates FAIL:
-   - Revert cleanly to the MUST FIX checkpoint using `git clean -fd` then `git checkout <must-fix-sha> -- .` as separate commands.
-   - Move all SHOULD FIX findings to DEFER in the state file.
-   - Skip the SHOULD FIX commit.
-
-3. If SHOULD FIX gates PASS, check `git diff --quiet`. If changes exist, run `git add` then `git commit` as separate commands with message `"fix: round ${ROUND} should-fix findings"`.
+**Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git clean -fd`, `git checkout <sha> -- .` as separate commands), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
 
 Update state file after each commit.
 
 ### Step 2g: Post Round Summary
 
-Write the round summary to a temp file, then post to the PR:
+Write summary to `${REVIEW_DIR}/round-summary-${REVIEW_ID}.md`, post:
 
 ```bash
 gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/round-summary-${REVIEW_ID}.md"
 ```
-
-Using `-F body=@file` avoids shell injection from generated content.
 
 ### Step 2h: Rebase Check
 
 ```bash
 git fetch origin "${BASE_BRANCH}"
 ```
-
-Compare the merge-base to detect if the base branch has moved:
 ```bash
 git merge-base HEAD "origin/${BASE_BRANCH}"
 ```
 
-- If base has NOT moved → skip (keep `rebasedThisRound: false`)
-- If base moved:
-  1. Attempt rebase:
-     ```bash
-     git rebase "origin/${BASE_BRANCH}"
-     ```
-  2. If conflict:
-     ```bash
-     git rebase --abort
-     ```
-     Then stop and notify user: "Rebase conflict detected. Please resolve manually."
-  3. If rebase succeeded: run quality gates
-  4. If gates fail: stop and notify user
-  5. If gates pass: set `rebasedThisRound: true` in state file
+If base moved: rebase, abort+notify on conflict, run gates if success. Set `rebasedThisRound` in state.
 
 ### Step 2i: Push
 
-If rebased this round:
-```bash
-git push --force-with-lease origin "${BRANCH}"
-```
-
-Otherwise:
-```bash
-git push origin "${BRANCH}"
-```
-
-Update state file.
+If rebased: `git push --force-with-lease origin "${BRANCH}"`. Otherwise: `git push origin "${BRANCH}"`.
 
 ---
 
@@ -419,144 +245,39 @@ Update state file.
 
 ### Step 3: Finalize
 
-#### Create GitHub Issues for Deferred Items
+1. **Deferred items** — create a GitHub issue for each (`gh issue create --body-file`). Write body to temp file first.
+2. **Update PR description** — write body to temp file, `gh pr edit --body-file`.
+3. **Post final summary comment** — `gh api ... -F "body=@file"`.
+4. **Write review artifact** to `docs/reviews/code-review-${REVIEW_ID}.md`. Create dir if needed.
 
-For each finding with disposition `defer`, create a GitHub issue:
-```bash
-gh issue create --title "..." --body-file "${REVIEW_DIR}/defer-issue-${REVIEW_ID}.md"
-```
+   Include: review metadata (ID, date, PR, status), summary metrics, pre-review findings + counter-review, each round's remote comments + Codex feedback + counter-review + user decisions + fixes, cumulative deferred items (with issue links), rejected items with rationale.
 
-Write the issue body to a temp file first to avoid shell injection.
+   **Full audit trail** — complete feedback and tables, not summaries. Review for sensitive data before committing.
 
-#### Update PR Description
-
-Write the final PR body to a temp file, then:
-```bash
-gh pr edit "${PR_NUMBER}" --body-file "${REVIEW_DIR}/pr-final-body-${REVIEW_ID}.md"
-```
-
-#### Post Final Summary Comment
-
-Write summary to temp file, post via:
-```bash
-gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/final-summary-${REVIEW_ID}.md"
-```
-
-#### Write Review Artifact
-
-Write the full review transcript to `docs/reviews/code-review-${REVIEW_ID}.md` in the current repo.
-
-**Note:** Review the artifact content before committing — remove any sensitive data from raw agent outputs.
-
-The artifact should follow this structure:
-
-```markdown
-# Code Review: {branch}
-
-**Review ID:** {REVIEW_ID}
-**Date:** [date]
-**PR:** #{prNumber}
-**Status:** [Converged after N rounds | Max rounds reached]
-
-## Summary
-| Metric | Count |
-|--------|-------|
-| Rounds | N |
-| Total findings | X |
-| Agreed & fixed | X |
-| Partially fixed | X |
-| Deferred | X |
-| Rejected | X |
-
-## Pre-Review
-[Pre-review findings, counter-review, fixes applied]
-
-## Round 1
-### Remote Agent Comments
-[Comments from GitHub-connected agents — from all three endpoints]
-### Codex Review
-[Full Codex feedback]
-### Counter-Review
-[Disposition table]
-### User Decisions
-[Rejected finding resolutions]
-### Fixes Applied
-[What was changed]
-
-## Round 2
-[Same structure]
-
-## Deferred Items
-[Cumulative list — these became GitHub issues]
-
-## Rejected Items
-[User-confirmed skips with rationale]
-```
-
-If `docs/reviews/` does not exist, create it.
-
-#### Cleanup Temp Files
-
-```bash
-rm -rf .review/
-```
+5. **Cleanup:** `rm -rf .review/`
 
 ### Step 4: Present Final Result
 
-**If converged:**
-```
-## Code Review Complete
-
-**Status:** Converged after N round(s)
-**PR:** #[number]
-**Artifact:** docs/reviews/code-review-{REVIEW_ID}.md
-
-### Review Summary
-- Rounds: N
-- Total findings: X
-- Agreed & fixed: X
-- Partially fixed: X
-- Deferred: X (GitHub issues created)
-- Rejected: X
-
-The code has been reviewed by multiple agents and counter-reviewed by Claude. All MUST FIX findings resolved.
-```
-
-**If max rounds reached:**
-```
-## Code Review Complete
-
-**Status:** Max rounds (5) reached — not fully converged
-**PR:** #[number]
-**Artifact:** docs/reviews/code-review-{REVIEW_ID}.md
-
-### Remaining Concerns
-[List unresolved MUST FIX findings]
-
-### Deferred Items
-[Cumulative list — GitHub issues created]
-
-Review did not fully converge. Check remaining concerns before merging.
-```
+Present status (converged or max rounds), PR link, artifact link, summary metrics, and any remaining concerns or deferred items.
 
 ---
 
 ## Rules
 
-- Claude **critically evaluates** all agent feedback before fixing — this is counter-review, not compliance
+- Claude **critically evaluates** all feedback — counter-review, not compliance
 - Every finding MUST get a disposition — no silent skipping
-- `reject` dispositions MUST go through the user decision gate — Claude cannot unilaterally ignore feedback
-- MUST FIX findings are always committed BEFORE SHOULD FIX (safe rollback checkpoint)
-- Quality gates run after every fix batch — never skip
-- Guard empty commits: always check `git diff --quiet` before committing
-- All bash variables MUST be quoted: `"${VAR}"` not `${VAR}`
-- PR bodies and comment bodies MUST use temp files with `-F body=@file` — never inline generated content in shell commands
-- State file MUST be read and updated after every major step
-- Codex model and reasoning effort are inherited from `~/.codex/config.toml` — do not hardcode `-m` unless the user overrides
-- Always use read-only sandbox (`-s read-only`) for Codex — it should never write files
-- Minimum 2 rounds (review + re-review), max 5 to prevent infinite loops
-- If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
-- If `gh auth status` fails, inform the user and suggest `gh auth login`
-- Claude fixes code directly via Edit/Write tools — NEVER spawn `claude -p` or any Claude subprocess
-- **Never use `cd` in Bash commands** — it creates compound commands that trigger manual approval. Use `-C <dir>` for codex and git commands, `--repo owner/repo` for gh commands. Run each command standalone, never chained with `cd &&`
-- **Never use `$()` command substitution or pipe to `jq`** — these trigger approval prompts. Run commands standalone and parse JSON output natively
+- `reject` dispositions MUST go through the user decision gate
+- MUST FIX committed BEFORE SHOULD FIX (safe rollback checkpoint)
+- Quality gates after every fix batch — never skip
+- Guard empty commits: `git diff --quiet` before committing
+- Quote all bash variables: `"${VAR}"`
+- PR/comment bodies via temp files with `-F body=@file` — never inline
+- State file read/updated after every major step
+- Codex model inherited from `~/.codex/config.toml` — do not hardcode `-m`
+- Always `-s read-only` for Codex
+- Minimum 2 rounds, max 5
+- If Codex CLI missing, suggest `npm install -g @openai/codex`
+- If `gh auth status` fails, suggest `gh auth login`
+- Fix code via Edit/Write tools — NEVER spawn `claude -p` or Claude subprocess
+- **Never use `cd` in Bash** — use `-C <dir>` for codex/git, `--repo` for gh
+- **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
