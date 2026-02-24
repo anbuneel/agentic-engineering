@@ -206,9 +206,12 @@ Update dispositions in state file.
 
 ### Step 2e: Check Convergence
 
+**Note:** Convergence is checked AFTER Step 2d (counter-review) but BEFORE Step 2f (fix). The `fixesMadeThisRound` flag refers to whether Step 2f will produce commits — i.e., whether there are `agree` or `partial` dispositions from this round's counter-review.
+
 - **Minimum 2 rounds required** — never exit before Round 2
-- Round ≥ 2 AND all MUST FIX resolved AND no net new findings → **converged**
-- Round ≥ 2 AND Codex APPROVED AND no unresolved MUST FIX → **converged**
+- **If fixes will be made this round** (any `agree` or `partial` dispositions) → **not converged** — a verification round is needed after every fix
+- Round ≥ 2 AND no fixes this round AND all MUST FIX resolved AND no net new findings → **converged**
+- Round ≥ 2 AND no fixes this round AND Codex APPROVED AND no unresolved MUST FIX → **converged**
 - Max rounds → exit with warning
 
 ### Step 2f: Fix
