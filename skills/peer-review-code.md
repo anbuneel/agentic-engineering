@@ -47,7 +47,7 @@ codex --version
 
 Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 
-Create `.review/` in the project root using an absolute path: `mkdir -p /absolute/path/to/project/.review`. Add to `.gitignore` if missing. Store the absolute path as `REVIEW_DIR`.
+Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
 Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, codexSessionId, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
 

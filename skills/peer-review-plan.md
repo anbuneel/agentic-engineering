@@ -12,7 +12,7 @@ Send the current implementation plan to OpenAI Codex CLI for peer review. Claude
 ### Step 1: Setup
 
 1. Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
-2. Create `.review/` in the project root using an absolute path: `mkdir -p /absolute/path/to/project/.review`. Add to `.gitignore` if missing. Store the absolute path as `REVIEW_DIR`.
+2. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 3. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.
 
 ### Step 2: Codex Review (Round 1)
