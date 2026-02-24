@@ -49,9 +49,9 @@ Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_I
 
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, codexSessionId, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
+Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
 
-Read and update this state file after every major step to guard against context compression.
+**CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth for variables like `CODEX_SESSION_ID`, `round`, and `nextCodexCommand`. Always re-read it before acting.**
 
 ---
 
@@ -128,7 +128,9 @@ Update state file.
 
 ## Phase B: Review Loop
 
-Loop for up to 5 rounds. At round start, read state file, set `rebasedThisRound: false`.
+Loop for up to 5 rounds.
+
+**CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
 
 ### Step 2a: Wait Remote
 
@@ -154,21 +156,28 @@ Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_com
 
 ### Step 2b: Codex Review
 
-**Round 1:**
+**CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If it is missing or null, this is Round 1 — use fresh exec. **Using fresh `codex exec` on round 2+ is a bug.**
+
+**Round 1** (no `nextCodexCommand` in state):
 ```bash
 codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Capture `CODEX_SESSION_ID` from output. Save to state file.
-
-**Round 2+:**
-```bash
-codex exec resume "${CODEX_SESSION_ID}" "Code has been updated. [summary of changes]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
+Capture `CODEX_SESSION_ID` from output. Build the next round's resume command and save BOTH to state file:
+```json
+{
+  "codexSessionId": "<captured ID>",
+  "nextCodexCommand": "codex exec resume \"<captured ID>\" \"Code has been updated. [PLACEHOLDER_FOR_CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE\""
+}
 ```
 
-Resume output goes to stdout — capture from Bash tool result.
+**Round 2+** (`nextCodexCommand` exists in state):
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context.
+Read `nextCodexCommand` from state file. Replace `[PLACEHOLDER_FOR_CHANGE_SUMMARY]` with a summary of fixes made this round. Run the resulting command. Resume output goes to stdout — capture from Bash tool result.
+
+After running, update `nextCodexCommand` in state file with the same session ID for the next potential round.
+
+**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
 
 ### Step 2c: Consolidate
 
