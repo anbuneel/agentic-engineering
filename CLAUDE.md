@@ -11,6 +11,9 @@ skills/          ← User-invoked workflows (/command-name)
   peer-review-code.md
   peer-review-plan.md
   merge.md
+  security-scan.md
+  security-audit.md
+  security-posture.md
 agents/          ← Sub-agents (invoked via Task tool)
   codebase-snapshot.md
   code-cleanup-analyst.md

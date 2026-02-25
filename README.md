@@ -14,6 +14,8 @@ User-invoked workflows — run with `/command-name`.
 | **Peer Review Plan** | [`skills/peer-review-plan.md`](skills/peer-review-plan.md) | Iterative plan review between your agent and Codex CLI with counter-review and decision gate |
 | **Merge & Document** | [`skills/merge.md`](skills/merge.md) | Squash-merge a PR and update all project documentation |
 | **Security Scan** | [`skills/security-scan.md`](skills/security-scan.md) | Run SAST, dependency audit, and secret detection across the codebase |
+| **Security Audit** | [`skills/security-audit.md`](skills/security-audit.md) | Full-codebase AI security review with multi-agent counter-review |
+| **Security Posture** | [`skills/security-posture.md`](skills/security-posture.md) | Security hygiene baseline check with scorecard and letter grade |
 
 ## Agents
 
@@ -90,6 +92,8 @@ curl -o ~/.claude/commands/peer-review-code.md https://raw.githubusercontent.com
 curl -o ~/.claude/commands/peer-review-plan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-review-plan.md
 curl -o ~/.claude/commands/merge.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/merge.md
 curl -o ~/.claude/commands/security-scan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-scan.md
+curl -o ~/.claude/commands/security-audit.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-audit.md
+curl -o ~/.claude/commands/security-posture.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-posture.md
 
 # Agents
 curl --create-dirs -o ~/.claude/agents/codebase-snapshot.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/codebase-snapshot.md
@@ -139,6 +143,20 @@ All three are optional. The skill continues with local Codex CLI review if none 
 - npm (for `npm audit`) — runs automatically if `package.json` exists in the project root
 
 The skill detects which tools are available and runs only those. Missing tools are reported with install instructions.
+
+### Security Audit
+
+- Git
+- [Codex CLI](https://github.com/openai/codex) (optional) — `npm install -g @openai/codex`
+
+The skill uses Claude + pr-review-toolkit agents for AI analysis. Codex CLI adds an independent AI perspective if installed.
+
+### Security Posture
+
+- Git
+- [GitHub CLI (`gh`)](https://cli.github.com/) (optional) — for branch protection checks
+
+No external scanning tools needed — this checks project infrastructure and configuration only.
 
 ### Merge & Document
 
