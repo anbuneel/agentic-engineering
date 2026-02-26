@@ -21,27 +21,21 @@ When invoked, execute the following phases sequentially.
 
 ## Phase 1: Preflight
 
-### Step 1a: Verify Git Repo
+### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree
+git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
 
-### Step 1b: Detect Project Root
+Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
 
-```bash
-git rev-parse --show-toplevel
-```
-
-Store as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
-
-### Step 1c: Generate Scan ID
+### Step 1b: Generate Scan ID
 
 Generate a random 8-character hex string natively (not Bash). Store as `SCAN_ID`.
 
-### Step 1d: Detect Project Type
+### Step 1c: Detect Project Type
 
 Scan the project root for indicators. Set flags:
 
@@ -56,7 +50,7 @@ Scan the project root for indicators. Set flags:
 
 Use Read/Glob tools to check — not Bash.
 
-### Step 1e: Detect GitHub CLI
+### Step 1d: Detect GitHub CLI
 
 ```bash
 gh auth status
@@ -387,7 +381,7 @@ Present to the user:
 - **Never use `cd`** — use absolute paths everywhere
 - Use Read/Glob tools for file checks — not Bash (except for git/gh commands)
 - Quote all bash variables: `"${VAR}"`
-- Run each Bash command as a separate standalone command — no chaining with `&&` or `;`
+- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks) into single calls. Only keep separate commands where individual exit-code handling is needed.
 - **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
 - Do NOT commit the report automatically — let the user decide
 - N/A checks excluded from scoring — never penalize for inapplicable checks

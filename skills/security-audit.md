@@ -21,31 +21,25 @@ When invoked, execute the following phases sequentially.
 
 ## Phase 1: Preflight
 
-### Step 1a: Verify Git Repo
+### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree
+git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
 
-### Step 1b: Detect Project Root
+Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
 
-```bash
-git rev-parse --show-toplevel
-```
-
-Store as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
-
-### Step 1c: Generate Review ID
+### Step 1b: Generate Review ID
 
 Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 
-### Step 1d: Set Up Review Directory
+### Step 1c: Set Up Review Directory
 
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-### Step 1e: Detect Project Type
+### Step 1d: Detect Project Type
 
 Scan the project root for indicators. Set `PROJECT_TYPE` to one or more of:
 
@@ -62,7 +56,7 @@ Scan the project root for indicators. Set `PROJECT_TYPE` to one or more of:
 
 Use Read tool to check for these files — not Bash.
 
-### Step 1f: Detect Codex CLI
+### Step 1e: Detect Codex CLI
 
 ```bash
 codex --version
@@ -70,7 +64,7 @@ codex --version
 
 Set `HAS_CODEX` to true/false. If unavailable, warn: "Codex CLI not found. Continuing with Claude + pr-review-toolkit agents only. Install: `npm install -g @openai/codex`"
 
-### Step 1g: Initialize State File
+### Step 1f: Initialize State File
 
 Write state to `${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json`:
 
@@ -363,4 +357,4 @@ Present to the user:
 - Always `-s read-only` for Codex
 - Do NOT commit the report automatically — let the user decide
 - Fix code via Edit/Write tools — NEVER spawn `claude -p` or Claude subprocess
-- Run each Bash command as a separate standalone command — no chaining with `&&` or `;`
+- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks) into single calls. Only keep separate commands where individual exit-code handling is needed.

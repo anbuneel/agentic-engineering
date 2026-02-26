@@ -25,39 +25,30 @@ When invoked, execute the following phases sequentially.
 
 ## Phase 1: Preflight
 
-### Step 1a: Verify Git Repo
+### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree
+git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
 
-### Step 1b: Detect Project Root
+Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
 
-```bash
-git rev-parse --show-toplevel
-```
-
-Store as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
-
-### Step 1c: Generate Scan ID
+### Step 1b: Generate Scan ID
 
 Generate a random 8-character hex string natively (not Bash). Store as `SCAN_ID`.
 
-### Step 1d: Set Up Review Directory
+### Step 1c: Set Up Review Directory
 
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-### Step 1e: Detect Available Tools
+### Step 1d: Detect Available Tools
 
-Check which tools are installed by running each as a separate command:
+Check which scanning tools are installed in a single command:
 
 ```bash
-semgrep --version
-```
-```bash
-gitleaks version
+semgrep --version 2>/dev/null && echo "SEMGREP_OK" || echo "SEMGREP_MISSING"; gitleaks version 2>/dev/null && echo "GITLEAKS_OK" || echo "GITLEAKS_MISSING"
 ```
 
 Check if `package.json` exists in the project root (use Read tool, not Bash).
@@ -213,19 +204,11 @@ Write the report to `${PROJECT_ROOT}/docs/analysis/security-scan-${SCAN_ID}.md`:
 
 ## Phase 4: Cleanup
 
-Delete the temporary JSON files from `.review/`:
+Delete all temporary JSON files from `.review/` in a single command (only lists files for tools that actually ran):
 
 ```bash
-rm -f "${REVIEW_DIR}/semgrep-${SCAN_ID}.json"
+rm -f "${REVIEW_DIR}/semgrep-${SCAN_ID}.json" "${REVIEW_DIR}/npm-audit-${SCAN_ID}.json" "${REVIEW_DIR}/gitleaks-${SCAN_ID}.json"
 ```
-```bash
-rm -f "${REVIEW_DIR}/npm-audit-${SCAN_ID}.json"
-```
-```bash
-rm -f "${REVIEW_DIR}/gitleaks-${SCAN_ID}.json"
-```
-
-Run each as a separate command. Only delete files for tools that actually ran.
 
 ---
 
@@ -248,6 +231,6 @@ Present to the user:
 - **Secret values NEVER written** to the artifact or presented to the user — redact always, only show type and location
 - Quote all bash variables: `"${VAR}"`
 - Non-zero exit codes from scanning tools are expected when findings exist — check stderr for actual errors
-- Run each Bash command as a separate standalone command — no chaining with `&&` or `;`
+- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks, cleanup) into single calls. Only keep scan commands separate since each tool needs individual exit-code handling.
 - Do NOT commit the scan report automatically — let the user decide
 - Do NOT modify any source code — this skill is read-only analysis
