@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] - 2025-02-27
+
+### Added
+- `SECURITY.md` with vulnerability disclosure policy
+- Codex CLI compatibility table in README — shows which skills need it and which don't
+- GitHub issue templates (bug report, skill request) and PR template
+
+### Changed
+- README restructured: "Who Is This For?" section, quick-start moved above install, expanded skill/agent descriptions, LICENSE linked
+- CLAUDE.md sanitized — replaced personal paths with generic cross-platform instructions
+
+### Fixed
+- Broken `/security-review` reference → `/security-audit` in security-posture skill
+- Unresolved `{owner}/{repo}` in security-posture branch protection check — now resolves via `gh repo view`
+- Destructive `git clean -fd` removed from peer-review-code revert logic
+- Replaced `rm`, `2>/dev/null`, and shell redirects with cross-platform agent file tools across all skills
+- Hardcoded `git checkout main` in merge skill — now detects default branch dynamically
+
 ## [0.5.0] - 2025-02-27
 
 ### Added
