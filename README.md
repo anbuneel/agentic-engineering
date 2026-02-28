@@ -1,20 +1,18 @@
 # Agentic Engineering
 
-Workflow skills and sub-agents for AI coding agents. Each is a markdown instruction file that any AI agent can follow.
+Slash commands for [Claude Code](https://claude.ai/code) that add multi-agent code review, security scanning, and automated documentation workflows. Type `/peer-review-code` and your PR gets reviewed by multiple AI agents, counter-reviewed, and fixed — automatically.
 
-Built for [Claude Code](https://claude.ai/code), adaptable to other AI coding agents.
+Each skill is a markdown file. Drop it in `~/.claude/commands/`, and it becomes a slash command. No build step, no dependencies beyond Claude Code itself.
 
 ## Who Is This For?
 
-You're an engineer using AI coding assistants (Claude Code, Codex CLI, or similar) and you want structured workflows for things like code review, security scanning, and documentation — not just ad-hoc prompting.
-
-These skills and agents are **markdown instruction files**. They're not a CLI tool or a library — they're prompts that tell your AI agent *how* to run a multi-step workflow. Install them, invoke them with a slash command, and the agent handles the rest.
+You use Claude Code and want structured, repeatable workflows — not ad-hoc prompting. Install a skill, run it with `/command-name`, and the agent handles the rest.
 
 **You'll need:**
 - [Claude Code](https://claude.ai/code) (primary target) — skills work as slash commands out of the box
 - Git and a GitHub repo for most workflows
 
-**Optional:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`) — OpenAI's command-line coding agent. Two skills use it as a second reviewer to get an independent AI perspective alongside Claude. It's not required for most skills.
+**Optional:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`) — OpenAI's command-line coding agent. The peer-review skills use it as a **second reviewer from a different model**, so you get an independent perspective instead of Claude reviewing its own work. Without Codex, those two skills won't run, but the other four work fine on their own.
 
 | Skill | Needs Codex? |
 |-------|-------------|
