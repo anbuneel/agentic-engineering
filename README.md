@@ -2,7 +2,7 @@
 
 Workflow skills and sub-agents for AI coding agents. Each is a markdown instruction file that any AI agent can follow.
 
-Built for [Claude Code](https://claude.ai/code) but the workflow logic is agent-agnostic.
+Built for [Claude Code](https://claude.ai/code), adaptable to other AI coding agents.
 
 ## Who Is This For?
 
@@ -104,7 +104,9 @@ Then try the flagship skill — multi-agent code review on a feature branch:
 /peer-review-code
 ```
 
-This launches a full review cycle: Claude reviews your PR, sends it to Codex CLI for a second opinion, counter-reviews every finding, fixes what it agrees with, and asks you to break ties on anything it rejects. Runs 2–5 rounds until all issues are resolved.
+This launches a full review cycle: Claude reviews your PR, sends it to Codex CLI for a second opinion, counter-reviews every finding, fixes what it agrees with, and asks you to break ties on anything it rejects. Runs 2-5 rounds until all issues are resolved. See a [sample review artifact](docs/examples/code-review-sample.md) to understand what the output looks like.
+
+**Verify your installation:** Run `/security-posture` in any git repo. If you see a scorecard, you're set.
 
 ## Install
 
@@ -175,8 +177,8 @@ These are markdown files — any AI agent that can read instructions and execute
 **Codex configuration:** Model and reasoning effort are inherited from `~/.codex/config.toml` — the skills do not hardcode a model. Configure your preferred model there:
 
 ```toml
-model = "gpt-5.3-codex"
-model_reasoning_effort = "xhigh"
+model = "your-preferred-model"
+model_reasoning_effort = "high"
 ```
 
 **GitHub Apps (optional, for multi-agent coverage):**
