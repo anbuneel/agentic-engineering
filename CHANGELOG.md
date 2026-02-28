@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.6] - 2025-02-27
+
+### Added
+- "Why This Exists" section in README — motivation, prompt-as-code philosophy, counter-review origin, and why markdown over traditional code
+
+### Removed
+- All references to unreleased predecessor project
+
 ## [0.6.5] - 2025-02-27
 
 ### Added
