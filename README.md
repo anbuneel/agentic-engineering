@@ -27,13 +27,7 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 
 ## Why This Exists
 
-AI coding assistants are powerful, but ad-hoc prompting doesn't scale. You end up repeating the same review instructions, forgetting edge cases, and getting inconsistent results across sessions. These skills codify workflows that I run daily — turning them into repeatable, debuggable processes.
-
-The key insight: **prompts deserve the same rigor as code.** These markdown files have error handling, state management, convergence criteria, and rollback logic — not because it's over-engineering, but because without it, multi-agent workflows silently fail in ways you don't notice until production.
-
-The counter-review pattern came from a specific frustration: AI agents blindly apply every piece of feedback they receive, even when it's wrong. Having Claude assign dispositions (agree/partial/defer/reject) to each finding — and requiring the human to break ties on rejections — means nothing is silently applied and nothing is silently ignored.
-
-Why markdown instead of code? An earlier attempt as a TypeScript CLI hit a fundamental blocker: you can't easily nest one AI agent session inside another. Markdown instruction files sidestep that entirely — the agent *is* the runtime, and the skill is just a set of instructions it follows. No build step, no dependency management, no version conflicts.
+**Prompts deserve the same rigor as code.** These skills have error handling, state management, convergence criteria, and rollback logic — because without it, multi-agent workflows silently fail. Read the full [design philosophy](docs/design-philosophy.md) for the thinking behind the counter-review pattern, why markdown instead of code, and the cross-platform constraints that shaped every design decision.
 
 ## Flagship: Peer Review
 
