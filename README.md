@@ -139,10 +139,6 @@ Background sub-agents invoked via the Task tool. These run alongside your work, 
 
 [`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md) — Scans for dead code, unused imports, deprecated functions, and redundant files. Reports with confidence levels so you can remove code safely.
 
-### Code Simplifier
-
-[`agents/code-simplifier.md`](agents/code-simplifier.md) — Simplifies recently modified code for clarity and consistency. Runs automatically as the first step of `/peer-review-code`.
-
 ## Install
 
 ### Quick Install (macOS / Linux)
@@ -193,7 +189,6 @@ curl -o ~/.claude/commands/security-posture.md https://raw.githubusercontent.com
 # Agents
 curl --create-dirs -o ~/.claude/agents/codebase-snapshot.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/codebase-snapshot.md
 curl --create-dirs -o ~/.claude/agents/code-cleanup-analyst.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/code-cleanup-analyst.md
-curl --create-dirs -o ~/.claude/agents/code-simplifier.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/code-simplifier.md
 ```
 
 ### Using with Other AI Tools

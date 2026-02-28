@@ -17,7 +17,6 @@ skills/          ← User-invoked workflows (/command-name)
 agents/          ← Sub-agents (invoked via Task tool)
   codebase-snapshot.md
   code-cleanup-analyst.md
-  code-simplifier.md
 ```
 
 ## Hard Links (Development Setup)
