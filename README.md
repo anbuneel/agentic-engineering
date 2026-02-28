@@ -29,6 +29,14 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 
 **Prompts deserve the same rigor as code.** These skills have error handling, state management, convergence criteria, and rollback logic — because without it, multi-agent workflows silently fail. Read the full [design philosophy](docs/design-philosophy.md) for the thinking behind the counter-review pattern, why markdown instead of code, and the cross-platform constraints that shaped every design decision.
 
+**Design patterns in these skills:**
+
+- **Counter-review** — AI critically evaluates other AI's findings instead of blindly accepting them
+- **Convergence loops** — can't exit until fixes are verified clean; find → fix → verify → repeat
+- **State persistence** — JSON state file survives context window compaction so variables aren't lost mid-workflow
+- **Commit-ordered rollback** — MUST FIX committed before SHOULD FIX, so optional fixes can be reverted without losing critical ones
+- **Decision gates** — human-in-the-loop only on disagreements, not on every finding
+
 ## Flagship: Peer Review
 
 The core contribution — multi-agent review with counter-review, decision gates, and convergence loops. These aren't wrappers around a single AI reviewer. They orchestrate multiple agents, critically evaluate their feedback, and keep the human in the loop.
