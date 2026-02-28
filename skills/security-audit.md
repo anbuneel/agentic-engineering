@@ -329,7 +329,7 @@ This is an AI-powered analysis and may contain false positives or miss vulnerabi
 
 Delete the state file:
 
-Delete the state file `${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json` using the agent's file tools (not `rm`).
+Delete the state file: `rm -f "${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json"` (single Bash command, permission prompt expected).
 
 ### Step 7b: Present Results
 

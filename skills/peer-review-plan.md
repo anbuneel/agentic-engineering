@@ -103,7 +103,7 @@ Present status (approved or max rounds), link to artifact, summary metrics, and 
 
 ### Step 9: Cleanup
 
-Delete all files in `.review/` using the agent's file tools (not `rm`).
+Delete `.review/` and its contents: `rm -rf "${REVIEW_DIR}"` (single Bash command, permission prompt expected).
 
 ## Rules
 

@@ -254,7 +254,7 @@ If base moved: rebase, abort+notify on conflict, run gates if success. Set `reba
 
 ### Step 2i: Push
 
-If rebased: `git push --force-with-lease origin "${BRANCH}"`. Otherwise: `git push origin "${BRANCH}"`.
+If rebased: `git push --force-with-lease origin "${BRANCH}"` — `--force-with-lease` is safe here because it fails if the remote has commits not in your local copy (e.g., another contributor pushed). If it fails, stop and notify the user instead of retrying. Otherwise: `git push origin "${BRANCH}"`.
 
 ---
 
@@ -275,7 +275,7 @@ If rebased: `git push --force-with-lease origin "${BRANCH}"`. Otherwise: `git pu
 
    **Full audit trail** — complete feedback and tables, not summaries. Review for sensitive data before committing.
 
-5. **Cleanup:** Delete all files in `.review/` using the agent's file tools (not `rm`).
+5. **Cleanup:** Delete `.review/` and its contents: `rm -rf "${REVIEW_DIR}"` (single Bash command, permission prompt expected).
 
 ### Step 4: Present Final Result
 

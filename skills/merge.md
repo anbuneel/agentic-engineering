@@ -81,7 +81,7 @@ If the merge fails:
 ### Step 3: Switch to Target Branch
 
 ```bash
-git checkout ${TARGET_BRANCH}
+git checkout "${TARGET_BRANCH}"
 ```
 
 ```bash
