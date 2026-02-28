@@ -220,7 +220,7 @@ Fix all `agree` and `partial` findings using Edit/Write tools.
 
 **Commit MUST FIX first** (safe checkpoint). Run quality gates (each as a separate command). If pass and changes exist, commit `"fix: round ${ROUND} must-fix findings"`. Store SHA.
 
-**Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git clean -fd`, `git checkout <sha> -- .` as separate commands), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
+**Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git checkout <sha> -- .` to restore tracked files), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
 
 Update state file after each commit.
 
@@ -266,7 +266,7 @@ If rebased: `git push --force-with-lease origin "${BRANCH}"`. Otherwise: `git pu
 
    **Full audit trail** — complete feedback and tables, not summaries. Review for sensitive data before committing.
 
-5. **Cleanup:** `rm -rf .review/`
+5. **Cleanup:** Delete all files in `.review/` using the agent's file tools (not `rm`).
 
 ### Step 4: Present Final Result
 

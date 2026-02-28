@@ -148,9 +148,19 @@ Read all CI config files found in Check 3.1. Search for any of: `semgrep`, `snyk
 
 **N/A if `HAS_GH` is false.**
 
+Resolve owner/repo first:
+
 ```bash
-gh api repos/{owner}/{repo}/branches/main/protection --jq ".required_pull_request_reviews.required_approving_review_count // 0"
+gh repo view --json nameWithOwner
 ```
+
+Parse JSON natively to extract `{owner}/{repo}`.
+
+```bash
+gh api repos/{owner}/{repo}/branches/main/protection
+```
+
+Parse JSON natively — do NOT use `--jq`.
 
 If command fails (404 = no protection), also try with `master` instead of `main`.
 
@@ -371,7 +381,7 @@ Present to the user:
 2. **FAIL items**: List each failed check with a one-line fix suggestion
 3. **Top recommendations**: 3 most impactful actions to improve the score
 4. **Artifact path**: `docs/analysis/security-posture-${SCAN_ID}.md`
-5. **Complement**: "For code-level security analysis, run `/security-review`. For tool-based scanning (SAST, dependencies, secrets), run `/security-scan`."
+5. **Complement**: "For code-level security analysis, run `/security-audit`. For tool-based scanning (SAST, dependencies, secrets), run `/security-scan`."
 
 ---
 

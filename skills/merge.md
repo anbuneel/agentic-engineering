@@ -32,10 +32,18 @@ gh auth status
 ```
 - Not authenticated → stop: "Run `gh auth login` first."
 
+Detect the default branch:
+
+```bash
+gh repo view --json defaultBranchRef
+```
+
+Parse JSON natively to extract the default branch name. Store as `DEFAULT_BRANCH`.
+
 ```bash
 git rev-parse --abbrev-ref HEAD
 ```
-- `main` or `master` → stop: "Switch to the feature branch you want to merge."
+- Equals `DEFAULT_BRANCH` → stop: "Switch to the feature branch you want to merge."
 
 ```bash
 git status --porcelain
@@ -45,7 +53,7 @@ git status --porcelain
 Find the PR for the current branch:
 
 ```bash
-gh pr view --json number,title,state,mergeable
+gh pr view --json number,title,state,mergeable,baseRefName
 ```
 - No PR found → stop: "No PR found for this branch. Create one first."
 - State is not `OPEN` → stop: "PR is not open (state: {state})."
@@ -71,7 +79,7 @@ If the merge fails:
 ### Step 3: Switch to Main
 
 ```bash
-git checkout main && git pull
+git checkout ${DEFAULT_BRANCH} && git pull
 ```
 
 Verify the merge commit is present:

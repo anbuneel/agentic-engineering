@@ -45,11 +45,17 @@ Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review
 
 ### Step 1d: Detect Available Tools
 
-Check which scanning tools are installed in a single command:
+Check which scanning tools are installed (run each as a separate command):
 
 ```bash
-semgrep --version 2>/dev/null && echo "SEMGREP_OK" || echo "SEMGREP_MISSING"; gitleaks version 2>/dev/null && echo "GITLEAKS_OK" || echo "GITLEAKS_MISSING"
+semgrep --version
 ```
+
+```bash
+gitleaks version
+```
+
+Set flags based on which commands succeed (exit code 0) vs fail (command not found).
 
 Check if `package.json` exists in the project root (use Read tool, not Bash).
 
@@ -100,12 +106,12 @@ Store findings as `SEMGREP_FINDINGS` with count.
 **Skip if `HAS_NPM_AUDIT` is false.**
 
 ```bash
-npm audit --json --prefix "${PROJECT_ROOT}" > "${REVIEW_DIR}/npm-audit-${SCAN_ID}.json" 2>&1
+npm audit --json --prefix "${PROJECT_ROOT}"
 ```
 
-Note: `npm audit` returns exit code 1 when vulnerabilities are found — this is expected. Only treat as failure if the JSON output is not parseable.
+Note: `npm audit` returns exit code 1 when vulnerabilities are found — this is expected. Only treat as failure if the output is not parseable JSON.
 
-Parse JSON output natively (Read the output file, parse in-context).
+Capture stdout natively from the Bash tool result. Write it to `${REVIEW_DIR}/npm-audit-${SCAN_ID}.json` using the Write tool. Parse in-context.
 
 Extract from each vulnerability:
 - Package name
@@ -204,11 +210,10 @@ Write the report to `${PROJECT_ROOT}/docs/analysis/security-scan-${SCAN_ID}.md`:
 
 ## Phase 4: Cleanup
 
-Delete all temporary JSON files from `.review/` in a single command (only lists files for tools that actually ran):
-
-```bash
-rm -f "${REVIEW_DIR}/semgrep-${SCAN_ID}.json" "${REVIEW_DIR}/npm-audit-${SCAN_ID}.json" "${REVIEW_DIR}/gitleaks-${SCAN_ID}.json"
-```
+Delete all temporary JSON files from `.review/` using the agent's file tools (not `rm`). Only delete files for tools that actually ran:
+- `${REVIEW_DIR}/semgrep-${SCAN_ID}.json`
+- `${REVIEW_DIR}/npm-audit-${SCAN_ID}.json`
+- `${REVIEW_DIR}/gitleaks-${SCAN_ID}.json`
 
 ---
 
