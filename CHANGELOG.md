@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.5] - 2025-02-27
+
+### Added
+- Markdownlint GitHub Action for CI on push and PRs
+- Markdownlint config (`.markdownlint.json`) with sensible defaults for skill files
+
+### Changed
+- Rewrote README opening for instant clarity — leads with what it does, not abstract descriptions
+- Better Codex CLI explanation — now explains *why* (independent second opinion from a different model)
+- License year updated to 2025-2026
+
 ## [0.6.4] - 2025-02-27
 
 ### Added
