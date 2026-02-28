@@ -148,24 +148,22 @@ Read all CI config files found in Check 3.1. Search for any of: `semgrep`, `snyk
 
 **N/A if `HAS_GH` is false.**
 
-Resolve owner/repo first:
+Resolve owner/repo and default branch:
 
 ```bash
-gh repo view --json nameWithOwner
+gh repo view --json nameWithOwner,defaultBranchRef
 ```
 
-Parse JSON natively to extract `{owner}/{repo}`.
+Parse JSON natively to extract `{owner}/{repo}` and the default branch name.
 
 ```bash
-gh api repos/{owner}/{repo}/branches/main/protection
+gh api repos/{owner}/{repo}/branches/{default_branch}/protection
 ```
 
 Parse JSON natively — do NOT use `--jq`.
 
-If command fails (404 = no protection), also try with `master` instead of `main`.
-
 - **PASS**: Branch protection rules exist (non-404 response)
-- **FAIL**: No branch protection on main/master
+- **FAIL**: No branch protection on default branch (404 response)
 - **N/A**: GitHub CLI not available or not a GitHub repo
 - Details: protection status summary
 

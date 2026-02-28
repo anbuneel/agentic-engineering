@@ -76,7 +76,7 @@ If the merge fails:
 
 ---
 
-### Step 3: Switch to Main
+### Step 3: Switch to Default Branch
 
 ```bash
 git checkout ${DEFAULT_BRANCH} && git pull
