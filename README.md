@@ -16,12 +16,12 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 
 | Skill | Needs Codex? |
 |-------|-------------|
+| `/peer-review-code` | Yes |
+| `/peer-review-plan` | Yes |
 | `/security-posture` | No |
 | `/security-scan` | No |
 | `/security-audit` | No (optional second opinion) |
 | `/merge` | No |
-| `/peer-review-code` | Yes |
-| `/peer-review-plan` | Yes |
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
