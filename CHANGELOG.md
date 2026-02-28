@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.4] - 2025-02-27
+
+### Added
+- Sample review artifact (`docs/examples/code-review-sample.md`) showing full peer-review-code output with counter-review, decision gates, and convergence
+- Install verification one-liner in Quick Start section
+
+### Changed
+- Softened "agent-agnostic" claim to "adaptable to other AI coding agents"
+- Removed placeholder model name from Codex config example — now says "your-preferred-model"
+
 ## [0.6.3] - 2025-02-27
 
 ### Fixed
