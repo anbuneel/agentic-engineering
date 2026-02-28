@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.3] - 2025-02-27
+
+### Fixed
+- Merge skill checked out repo default branch instead of PR's actual target branch — now uses `baseRefName` from the PR, supporting release/hotfix flows
+- Split compound `git checkout && git pull` into separate commands for prompt/approval reliability
+
 ## [0.6.2] - 2025-02-27
 
 ### Fixed

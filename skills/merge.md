@@ -59,7 +59,9 @@ gh pr view --json number,title,state,mergeable,baseRefName
 - State is not `OPEN` → stop: "PR is not open (state: {state})."
 - Mergeable is `CONFLICTING` → stop: "PR has merge conflicts. Resolve them before merging."
 
-Print the PR number and title to the user for confirmation before proceeding.
+Parse JSON natively. Store `baseRefName` as `TARGET_BRANCH` — this is the branch the PR merges into (may differ from the repo default branch in release/hotfix flows).
+
+Print the PR number, title, and target branch to the user for confirmation before proceeding.
 
 ---
 
@@ -76,10 +78,14 @@ If the merge fails:
 
 ---
 
-### Step 3: Switch to Default Branch
+### Step 3: Switch to Target Branch
 
 ```bash
-git checkout ${DEFAULT_BRANCH} && git pull
+git checkout ${TARGET_BRANCH}
+```
+
+```bash
+git pull
 ```
 
 Verify the merge commit is present:
