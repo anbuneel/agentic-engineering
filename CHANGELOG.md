@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.1] - 2025-02-27
+
+### Fixed
+- Uninitialized `BRANCH` and `BASE_BRANCH` variables in peer-review-code — now captured in preflight and persisted in state file
+- Peer-review-code preflight only blocked `main`/`master` — now detects default branch dynamically via `gh repo view`
+- Undefined `${ROUND}` in peer-review-plan fallback command
+- Missing `$` in peer-review-plan artifact path (`{REVIEW_ID}` → `${REVIEW_ID}`)
+
 ## [0.6.0] - 2025-02-27
 
 ### Added
