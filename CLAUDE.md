@@ -20,20 +20,23 @@ agents/          ← Sub-agents (invoked via Task tool)
   code-simplifier.md
 ```
 
-## Hard Links
+## Hard Links (Development Setup)
 
-`~/.claude/commands/` and `~/.claude/agents/` files are hard-linked to this repo's `skills/` and `agents/` folders. Edit in either location, changes sync instantly.
+If you clone this repo and want edits to sync automatically with your Claude Code config, use hard links instead of copying:
 
-**To publish changes:**
 ```bash
-cd /c/anbs-dev/agentic-engineering && git add -A && git commit && git push
+# macOS / Linux
+ln skills/*.md ~/.claude/commands/
+ln agents/*.md ~/.claude/agents/
 ```
 
-**If a hard link breaks** (tool deleted and recreated the file instead of editing in place), re-create it:
 ```powershell
-New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\commands\<file>.md' -Target 'C:\anbs-dev\agentic-engineering\skills\<file>.md'
-New-Item -ItemType HardLink -Path 'C:\Users\nanbu\.claude\agents\<file>.md' -Target 'C:\anbs-dev\agentic-engineering\agents\<file>.md'
+# Windows
+Get-ChildItem skills\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "~\.claude\commands\$($_.Name)" -Target $_.FullName }
+Get-ChildItem agents\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "~\.claude\agents\$($_.Name)" -Target $_.FullName }
 ```
+
+Edit in either location, changes sync instantly. If a hard link breaks (tool deleted and recreated the file instead of editing in place), re-run the commands above.
 
 ## Key Patterns
 

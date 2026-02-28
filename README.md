@@ -13,7 +13,17 @@ These skills and agents are **markdown instruction files**. They're not a CLI to
 **You'll need:**
 - [Claude Code](https://claude.ai/code) (primary target) — skills work as slash commands out of the box
 - Git and a GitHub repo for most workflows
-- [Codex CLI](https://github.com/openai/codex) (optional) — enables multi-agent review where Codex provides a second opinion
+
+**Optional:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`) — OpenAI's command-line coding agent. Two skills use it as a second reviewer to get an independent AI perspective alongside Claude. It's not required for most skills.
+
+| Skill | Needs Codex? |
+|-------|-------------|
+| `/security-posture` | No |
+| `/security-scan` | No |
+| `/security-audit` | No (optional second opinion) |
+| `/merge` | No |
+| `/peer-review-code` | Yes |
+| `/peer-review-plan` | Yes |
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
