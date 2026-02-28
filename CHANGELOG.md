@@ -107,8 +107,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Renamed "adversarial review" to "peer review"
 
 ### Fixed
-- Removed `.paira/config.json` dependency from peer-review-code
-- Cleaned stale references from agent files
+- Cleaned stale references and legacy config dependencies from skill and agent files
 
 ## [0.1.0] - 2025-02-01
 

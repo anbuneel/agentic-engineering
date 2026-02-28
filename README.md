@@ -231,10 +231,6 @@ Skills work on Windows, macOS, and Linux:
 - File operations use Read/Write tools instead of shell commands
 - Codex working directory set via `-C` flag instead of `cd` to avoid compound command approval
 
-## Origin
-
-These grew out of [Paira](https://github.com/anbuneel/paira), a multi-agent orchestration project for agentic engineering. The original TypeScript CLI approach hit a fundamental blocker (nested agent invocation), which led to the realization that markdown instruction files are simpler, more reliable, and agent-agnostic.
-
 ## License
 
 [MIT](LICENSE)

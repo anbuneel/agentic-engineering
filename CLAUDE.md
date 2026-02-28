@@ -53,6 +53,3 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 - Generate session IDs natively — no Bash calls for setup
 - All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
 
-## Origin
-
-Grew out of [Paira](https://github.com/anbuneel/paira). The TypeScript CLI hit a nested Claude invocation blocker — skills sidestep it entirely since Claude IS the session.
