@@ -35,7 +35,9 @@ The counter-review pattern came from a specific frustration: AI agents blindly a
 
 Why markdown instead of code? An earlier attempt as a TypeScript CLI hit a fundamental blocker: you can't easily nest one AI agent session inside another. Markdown instruction files sidestep that entirely — the agent *is* the runtime, and the skill is just a set of instructions it follows. No build step, no dependency management, no version conflicts.
 
-## Skills
+## Flagship: Peer Review
+
+The core contribution — multi-agent review with counter-review, decision gates, and convergence loops. These aren't wrappers around a single AI reviewer. They orchestrate multiple agents, critically evaluate their feedback, and keep the human in the loop.
 
 ### `/peer-review-code` — Multi-Agent Code Review
 
@@ -45,23 +47,50 @@ Claude reviews your PR, sends it to Codex CLI and GitHub bots for independent se
 
 See a [sample review artifact](docs/examples/code-review-sample.md) to understand what the output looks like.
 
+**How it works:**
+
+1. **Code simplification** — Code Simplifier agent cleans up the diff before review
+2. **Pre-review** — Claude's own agents (code-reviewer, silent-failure-hunter, type-design-analyzer) scan in parallel
+3. **PR creation** — pushes the branch and opens a PR if one doesn't exist
+4. **Multi-agent review loop** (2-5 rounds):
+   - Wait for GitHub bot reviews (Claude bot, Devin, Codex) if installed
+   - Codex CLI reviews independently via `codex exec`
+   - Claude **counter-reviews** every finding from every source
+   - You resolve any rejections or deferrals at the **decision gate**
+   - Claude fixes agreed findings, commits, pushes
+   - Next round verifies the fixes
+5. **Finalize** — deferred items become GitHub issues, review artifact saved to `docs/reviews/`
+
+**Counter-review dispositions:**
+
+| Disposition | Meaning | Action |
+|-------------|---------|--------|
+| **agree** | Reviewer is right | Fix now |
+| **partial** | Valid but scoped down | Fix the core issue |
+| **defer** | Valid but not now | Log for later |
+| **reject** | Disagree — must justify | User breaks the tie |
+
 **What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — Claude critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored.
 
 ### `/peer-review-plan` — Two-Agent Plan Review
 
 [`skills/peer-review-plan.md`](skills/peer-review-plan.md) | Requires: Codex CLI
 
-Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews → Claude counter-reviews with dispositions → you resolve disputes → Claude revises → repeat. Min 2 rounds, max 5.
+Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews → Claude counter-reviews with dispositions → you resolve disputes → Claude revises → repeat. Min 2 rounds, max 5. Same counter-review and decision gate patterns as code review.
 
-**What makes it different:** Gets a second model's perspective on your architecture before you write any code.
+**What makes it different:** Gets a second model's perspective on your architecture before you write any code. Catches blind spots that a single model misses.
+
+---
+
+## Security Skills
+
+Three complementary skills covering different security angles — infrastructure checks, tool-based scanning, and AI-driven analysis.
 
 ### `/security-posture` — Security Hygiene Scorecard
 
 [`skills/security-posture.md`](skills/security-posture.md) | Requires: git. Optional: gh
 
-Checks 16 security hygiene items across 6 categories: secrets management, dependency security, code quality gates, access control, container security, and infrastructure. Returns a letter-graded scorecard (A-F) with specific fix recommendations.
-
-**What makes it different:** No scanning tools needed — it checks your project's *infrastructure and configuration*, not your code. Zero setup, instant results.
+Checks 16 security hygiene items across 6 categories: secrets management, dependency security, code quality gates, access control, container security, and infrastructure. Returns a letter-graded scorecard (A-F) with specific fix recommendations. No scanning tools needed — zero setup, instant results.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -84,25 +113,25 @@ Checks 16 security hygiene items across 6 categories: secrets management, depend
 
 [`skills/security-scan.md`](skills/security-scan.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
 
-Runs Semgrep (static analysis), `npm audit` (dependency vulnerabilities), and Gitleaks (secret detection) across your codebase. Auto-detects which tools are installed and runs only those. Outputs a consolidated report with findings by severity.
-
-**What makes it different:** Orchestrates multiple scanning tools in one command and merges the results. Missing tools are reported with install instructions, not silent failures.
+Runs Semgrep (static analysis), `npm audit` (dependency vulnerabilities), and Gitleaks (secret detection). Auto-detects which tools are installed and runs only those. Outputs a consolidated report with findings by severity.
 
 ### `/security-audit` — AI-Driven Security Review
 
 [`skills/security-audit.md`](skills/security-audit.md) | Requires: git. Optional: Codex CLI
 
-Deep security review using Claude + specialized agents to analyze your codebase for vulnerabilities. Codex CLI adds an independent AI assessment if installed. All findings go through counter-review before action — same disposition system as peer review.
+Deep security review using Claude + specialized agents. Codex CLI adds an independent AI assessment if installed. All findings go through counter-review before action — same disposition system as peer review.
 
-**What makes it different:** Combines multiple AI agents looking at your code from different security angles, then critically evaluates their findings instead of dumping a raw list.
+---
+
+## Workflow Skills
 
 ### `/merge` — Squash-Merge with Auto-Documentation
 
 [`skills/merge.md`](skills/merge.md) | Requires: git, gh
 
-Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks (clean tree, PR state, merge conflicts) and safe branch cleanup.
+Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and safe branch cleanup.
 
-**What makes it different:** The doc update step is the point — it ensures your project documentation stays in sync with merged work instead of drifting.
+---
 
 ## Agents
 
@@ -110,44 +139,15 @@ Background sub-agents invoked via the Task tool. These run alongside your work, 
 
 ### Codebase Snapshot
 
-[`agents/codebase-snapshot.md`](agents/codebase-snapshot.md)
-
-Captures a point-in-time snapshot of your codebase: architecture diagram, tech stack, file/line metrics, deployment info, and a timeline of changes since the last snapshot. Useful for documenting progress between milestones.
+[`agents/codebase-snapshot.md`](agents/codebase-snapshot.md) — Captures architecture diagram, tech stack, file/line metrics, deployment info, and a timeline of changes since the last snapshot.
 
 ### Code Cleanup Analyst
 
-[`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md)
-
-Scans for dead code, unused imports, deprecated functions, and redundant files. Reports findings with confidence levels and safety notes so you can remove code without breaking things.
+[`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md) — Scans for dead code, unused imports, deprecated functions, and redundant files. Reports with confidence levels so you can remove code safely.
 
 ### Code Simplifier
 
-[`agents/code-simplifier.md`](agents/code-simplifier.md)
-
-Reviews recently modified code and simplifies it for clarity and consistency — flattening unnecessary nesting, removing redundant logic, and aligning with project conventions. Runs automatically as the first step of `/peer-review-code`.
-
-## Key Patterns
-
-These patterns are shared across the review skills.
-
-### Counter-Review
-
-The agent doesn't blindly apply reviewer feedback. Every finding gets a disposition:
-
-| Disposition | Meaning | Action |
-|-------------|---------|--------|
-| **agree** | Reviewer is right | Fix / revise now |
-| **partial** | Valid but scoped down | Fix the core issue |
-| **defer** | Valid but not now | Log for later |
-| **reject** | Disagree with reviewer | Must justify why |
-
-### Decision Gate
-
-When the agent rejects or defers a finding, **you break the tie**. No feedback is silently ignored.
-
-### Convergence Loop
-
-Code review runs in rounds (min 2, max 5). Each round: collect agent feedback → counter-review → fix → push → repeat. Requires at least one re-review round to verify fixes before converging.
+[`agents/code-simplifier.md`](agents/code-simplifier.md) — Simplifies recently modified code for clarity and consistency. Runs automatically as the first step of `/peer-review-code`.
 
 ## Install
 
