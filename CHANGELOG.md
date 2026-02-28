@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.2] - 2025-02-27
+
+### Fixed
+- Security-posture branch protection check hardcoded to `main`/`master` — now detects default branch via `gh repo view`
+- Wording drift in merge skill heading ("Switch to Main" → "Switch to Default Branch")
+
 ## [0.6.1] - 2025-02-27
 
 ### Fixed
