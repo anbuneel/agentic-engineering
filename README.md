@@ -37,28 +37,98 @@ Why markdown instead of code? An earlier attempt as a TypeScript CLI hit a funda
 
 ## Skills
 
-User-invoked workflows — run with `/command-name`.
+### `/peer-review-code` — Multi-Agent Code Review
 
-| Skill | File | Description |
-|-------|------|-------------|
-| **Peer Review Code** | [`skills/peer-review-code.md`](skills/peer-review-code.md) | Multi-agent code review: Claude reviews your PR, sends it to Codex CLI and GitHub bots for second opinions, counter-reviews every finding, fixes what it agrees with, and asks you to break ties. Runs 2–5 rounds until converged. |
-| **Peer Review Plan** | [`skills/peer-review-plan.md`](skills/peer-review-plan.md) | Two-agent plan review: Claude and Codex CLI take turns reviewing a plan document, with counter-review dispositions and a decision gate so nothing is silently ignored. |
-| **Merge & Document** | [`skills/merge.md`](skills/merge.md) | Squash-merge a PR via `gh`, then auto-update README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and safe branch cleanup. |
-| **Security Scan** | [`skills/security-scan.md`](skills/security-scan.md) | Run Semgrep (SAST), `npm audit` (dependencies), and Gitleaks (secrets) across your codebase. Auto-detects which tools are installed and runs only those. Outputs a consolidated report. |
-| **Security Audit** | [`skills/security-audit.md`](skills/security-audit.md) | Deep AI-driven security review: Claude + specialized agents analyze your codebase for vulnerabilities, then Codex CLI provides an independent assessment. Findings go through counter-review before action. |
-| **Security Posture** | [`skills/security-posture.md`](skills/security-posture.md) | Checks 16 security hygiene items across 6 categories (secrets, dependencies, code quality, access control, containers, infrastructure). Returns a letter-graded scorecard with specific recommendations. |
+[`skills/peer-review-code.md`](skills/peer-review-code.md) | Requires: git, gh, Codex CLI
+
+Claude reviews your PR, sends it to Codex CLI and GitHub bots for independent second opinions, then **counter-reviews every finding** — agreeing, scoping down, deferring, or rejecting with justification. You break ties on rejections. Runs 2-5 rounds until all issues are resolved, with a mandatory verification round after fixes.
+
+See a [sample review artifact](docs/examples/code-review-sample.md) to understand what the output looks like.
+
+**What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — Claude critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored.
+
+### `/peer-review-plan` — Two-Agent Plan Review
+
+[`skills/peer-review-plan.md`](skills/peer-review-plan.md) | Requires: Codex CLI
+
+Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews → Claude counter-reviews with dispositions → you resolve disputes → Claude revises → repeat. Min 2 rounds, max 5.
+
+**What makes it different:** Gets a second model's perspective on your architecture before you write any code.
+
+### `/security-posture` — Security Hygiene Scorecard
+
+[`skills/security-posture.md`](skills/security-posture.md) | Requires: git. Optional: gh
+
+Checks 16 security hygiene items across 6 categories: secrets management, dependency security, code quality gates, access control, container security, and infrastructure. Returns a letter-graded scorecard (A-F) with specific fix recommendations.
+
+**What makes it different:** No scanning tools needed — it checks your project's *infrastructure and configuration*, not your code. Zero setup, instant results.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Security Posture: B (75%)                          │
+│                                                     │
+│  1. Secrets Management        ██████████  3/3 PASS  │
+│  2. Dependency Security       ██████░░░░  2/4 PASS  │
+│  3. Code Quality Gates        ████████░░  2/3 PASS  │
+│  4. Access Control            ██████░░░░  1/2 PASS  │
+│  5. Container Security        ░░░░░░░░░░  N/A       │
+│  6. Infrastructure            ████░░░░░░  1/3 PASS  │
+│                                                     │
+│  Top recommendations:                               │
+│  • Add dependency pinning (lock file missing)       │
+│  • Enable branch protection on default branch       │
+└─────────────────────────────────────────────────────┘
+```
+
+### `/security-scan` — SAST, Dependencies, and Secrets
+
+[`skills/security-scan.md`](skills/security-scan.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
+
+Runs Semgrep (static analysis), `npm audit` (dependency vulnerabilities), and Gitleaks (secret detection) across your codebase. Auto-detects which tools are installed and runs only those. Outputs a consolidated report with findings by severity.
+
+**What makes it different:** Orchestrates multiple scanning tools in one command and merges the results. Missing tools are reported with install instructions, not silent failures.
+
+### `/security-audit` — AI-Driven Security Review
+
+[`skills/security-audit.md`](skills/security-audit.md) | Requires: git. Optional: Codex CLI
+
+Deep security review using Claude + specialized agents to analyze your codebase for vulnerabilities. Codex CLI adds an independent AI assessment if installed. All findings go through counter-review before action — same disposition system as peer review.
+
+**What makes it different:** Combines multiple AI agents looking at your code from different security angles, then critically evaluates their findings instead of dumping a raw list.
+
+### `/merge` — Squash-Merge with Auto-Documentation
+
+[`skills/merge.md`](skills/merge.md) | Requires: git, gh
+
+Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks (clean tree, PR state, merge conflicts) and safe branch cleanup.
+
+**What makes it different:** The doc update step is the point — it ensures your project documentation stays in sync with merged work instead of drifting.
 
 ## Agents
 
-Sub-agents that run in the background via the Task tool.
+Background sub-agents invoked via the Task tool. These run alongside your work, not as slash commands.
 
-| Agent | File | Description |
-|-------|------|-------------|
-| **Codebase Snapshot** | [`agents/codebase-snapshot.md`](agents/codebase-snapshot.md) | Captures a point-in-time snapshot of your codebase: architecture diagram, tech stack, file/line metrics, deployment info, and a timeline of changes since the last snapshot. Useful for documenting progress between milestones. |
-| **Code Cleanup Analyst** | [`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md) | Scans for dead code, unused imports, deprecated functions, and redundant files. Reports findings with confidence levels and safety notes so you can remove code without breaking things. |
-| **Code Simplifier** | [`agents/code-simplifier.md`](agents/code-simplifier.md) | Reviews recently modified code and simplifies it for clarity and consistency — flattening unnecessary nesting, removing redundant logic, and aligning with project conventions. |
+### Codebase Snapshot
+
+[`agents/codebase-snapshot.md`](agents/codebase-snapshot.md)
+
+Captures a point-in-time snapshot of your codebase: architecture diagram, tech stack, file/line metrics, deployment info, and a timeline of changes since the last snapshot. Useful for documenting progress between milestones.
+
+### Code Cleanup Analyst
+
+[`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md)
+
+Scans for dead code, unused imports, deprecated functions, and redundant files. Reports findings with confidence levels and safety notes so you can remove code without breaking things.
+
+### Code Simplifier
+
+[`agents/code-simplifier.md`](agents/code-simplifier.md)
+
+Reviews recently modified code and simplifies it for clarity and consistency — flattening unnecessary nesting, removing redundant logic, and aligning with project conventions. Runs automatically as the first step of `/peer-review-code`.
 
 ## Key Patterns
+
+These patterns are shared across the review skills.
 
 ### Counter-Review
 
@@ -78,41 +148,6 @@ When the agent rejects or defers a finding, **you break the tie**. No feedback i
 ### Convergence Loop
 
 Code review runs in rounds (min 2, max 5). Each round: collect agent feedback → counter-review → fix → push → repeat. Requires at least one re-review round to verify fixes before converging.
-
-## Quick Start
-
-Once installed, open Claude Code in any git repo and try:
-
-```
-/security-posture
-```
-
-No extra tools needed — it scans your project's security hygiene and returns a scorecard:
-
-```
-┌─────────────────────────────────────────────────────┐
-│  Security Posture: B (75%)                          │
-│                                                     │
-│  1. Secrets Management        ██████████  3/3 PASS  │
-│  2. Dependency Security       ██████░░░░  2/4 PASS  │
-│  3. Code Quality Gates        ████████░░  2/3 PASS  │
-│  4. Access Control            ██████░░░░  1/2 PASS  │
-│  5. Container Security        ░░░░░░░░░░  N/A       │
-│  6. Infrastructure            ████░░░░░░  1/3 PASS  │
-│                                                     │
-│  Top recommendations:                               │
-│  • Add dependency pinning (lock file missing)       │
-│  • Enable branch protection on default branch        │
-└─────────────────────────────────────────────────────┘
-```
-
-Then try the flagship skill — multi-agent code review on a feature branch:
-
-```
-/peer-review-code
-```
-
-This launches a full review cycle: Claude reviews your PR, sends it to Codex CLI for a second opinion, counter-reviews every finding, fixes what it agrees with, and asks you to break ties on anything it rejects. Runs 2-5 rounds until all issues are resolved. See a [sample review artifact](docs/examples/code-review-sample.md) to understand what the output looks like.
 
 ## Install
 
@@ -173,63 +208,29 @@ These are markdown files — any AI agent that can read instructions and execute
 
 **Verify your installation:** Run `/security-posture` in any git repo. If you see a scorecard, you're set.
 
-## Prerequisites
+## Tool Setup
 
-### Peer Review Code
-
-**Local tools:**
+**Required for all skills:**
+- [Claude Code](https://claude.ai/code)
 - Git
-- [GitHub CLI (`gh`)](https://cli.github.com/) — authenticated (`gh auth login`)
-- [Codex CLI](https://github.com/openai/codex) — `npm install -g @openai/codex`
 
-**Codex configuration:** Model and reasoning effort are inherited from `~/.codex/config.toml` — the skills do not hardcode a model. Configure your preferred model there:
+**Per-skill dependencies:**
+
+| Tool | Install | Used by |
+|------|---------|---------|
+| [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/peer-review-code`, `/merge`, `/security-posture` (optional) |
+| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | `/peer-review-code`, `/peer-review-plan`, `/security-audit` (optional) |
+| [Semgrep](https://semgrep.dev/) | `pip install semgrep` | `/security-scan` (optional) |
+| [Gitleaks](https://github.com/gitleaks/gitleaks) | `brew install gitleaks` | `/security-scan` (optional) |
+
+**Codex configuration:** Model and reasoning effort are inherited from `~/.codex/config.toml` — the skills do not hardcode a model:
 
 ```toml
 model = "your-preferred-model"
 model_reasoning_effort = "high"
 ```
 
-**GitHub Apps (optional, for multi-agent coverage):**
-1. [Claude bot](https://github.com/apps/claude) — automatic PR review
-2. [Devin](https://github.com/apps/devin-ai-integration) — automatic PR review
-3. [OpenAI Codex](https://github.com/apps/openai-codex) — automatic PR review
-
-All three are optional. The skill continues with local Codex CLI review if none respond.
-
-### Peer Review Plan
-
-- [Codex CLI](https://github.com/openai/codex) — `npm install -g @openai/codex`
-
-### Security Scan
-
-**Required:**
-- Git
-
-**Scanning tools (at least one required):**
-- [Semgrep](https://semgrep.dev/) — SAST scanner (`pip install semgrep` or `brew install semgrep`)
-- [Gitleaks](https://github.com/gitleaks/gitleaks) — secret detection (`brew install gitleaks` or [download from releases](https://github.com/gitleaks/gitleaks/releases))
-- npm (for `npm audit`) — runs automatically if `package.json` exists in the project root
-
-The skill detects which tools are available and runs only those. Missing tools are reported with install instructions.
-
-### Security Audit
-
-- Git
-- [Codex CLI](https://github.com/openai/codex) (optional) — `npm install -g @openai/codex`
-
-The skill uses Claude + pr-review-toolkit agents for AI analysis. Codex CLI adds an independent AI perspective if installed.
-
-### Security Posture
-
-- Git
-- [GitHub CLI (`gh`)](https://cli.github.com/) (optional) — for branch protection checks
-
-No external scanning tools needed — this checks project infrastructure and configuration only.
-
-### Merge & Document
-
-- Git
-- [GitHub CLI (`gh`)](https://cli.github.com/)
+**GitHub Apps (optional):** Install [Claude bot](https://github.com/apps/claude), [Devin](https://github.com/apps/devin-ai-integration), or [OpenAI Codex](https://github.com/apps/openai-codex) on your repo for additional automated PR review coverage. All optional — `/peer-review-code` works with just local Codex CLI.
 
 ## Cross-Platform
 
