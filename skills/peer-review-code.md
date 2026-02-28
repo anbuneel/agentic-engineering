@@ -36,7 +36,16 @@ git status --porcelain
 ```bash
 git rev-parse --abbrev-ref HEAD
 ```
-- `main` or `master` → stop: "Switch to a feature branch."
+Store as `BRANCH`.
+
+Detect the default branch:
+
+```bash
+gh repo view --json defaultBranchRef
+```
+Parse JSON natively to extract the default branch name. Store as `BASE_BRANCH`.
+
+- If `BRANCH` equals `BASE_BRANCH` → stop: "Switch to a feature branch."
 
 ```bash
 gh auth status
@@ -49,7 +58,7 @@ Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_I
 
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
+Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, branch, baseBranch, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
 
 **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth for variables like `CODEX_SESSION_ID`, `round`, and `nextCodexCommand`. Always re-read it before acting.**
 
@@ -130,7 +139,7 @@ Update state file.
 
 Loop for up to 5 rounds.
 
-**CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
+**CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `BRANCH`, `BASE_BRANCH`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
 
 ### Step 2a: Wait Remote
 

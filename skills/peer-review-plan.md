@@ -79,13 +79,13 @@ codex exec resume "${CODEX_SESSION_ID}" "I've revised the plan. Updated plan: ${
 
 Resume output goes to stdout — capture from Bash tool result.
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-round-${ROUND}-${REVIEW_ID}.md"` with prior round context.
+**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-round-N-${REVIEW_ID}.md"` (where N is the current round number) with prior round context.
 
 Go back to **Step 3**.
 
 ### Step 7: Write Review Artifact
 
-Write the full review transcript to `docs/reviews/plan-review-{REVIEW_ID}.md`. Create `docs/reviews/` if needed.
+Write the full review transcript to `docs/reviews/plan-review-${REVIEW_ID}.md`. Create `docs/reviews/` if needed.
 
 Include these sections:
 - **Metadata** — review ID, date, model, status (approved / max rounds), plan file path
