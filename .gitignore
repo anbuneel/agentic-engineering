@@ -1,0 +1,14 @@
+# Skill artifacts (generated during skill runs)
+.review/
+docs/reviews/
+docs/analysis/
+
+# Claude Code local settings
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (if users run skills in JS projects)
+node_modules/
