@@ -119,7 +119,7 @@ Fix all `agree` and `partial` findings using Edit/Write tools.
 
 Run quality gates (lint, typecheck, test, build) — each as a separate command. If any fail, stop and notify user.
 
-Guard empty commits — `git diff --quiet` first. If changes exist, `git add` then `git commit` as separate commands.
+Guard empty commits — `git -C "${PROJECT_ROOT}" diff --quiet` first. If changes exist, `git -C "${PROJECT_ROOT}" add` then `git -C "${PROJECT_ROOT}" commit` as separate commands.
 
 Update state file.
 
@@ -132,7 +132,7 @@ gh pr view --json number
 ```
 
 - PR exists → capture number, reuse.
-- No PR → push branch, write PR body to `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`, create with `gh pr create --body-file`, capture number.
+- No PR → `git -C "${PROJECT_ROOT}" push -u origin "${BRANCH}"`, write PR body to `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`, create with `gh pr create --body-file`, capture number.
 
 Update state file.
 
@@ -232,7 +232,7 @@ Fix all `agree` and `partial` findings using Edit/Write tools.
 
 **Commit MUST FIX first** (safe checkpoint). Run quality gates (each as a separate command). If pass and changes exist, commit `"fix: round ${ROUND} must-fix findings"`. Store SHA.
 
-**Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git checkout <sha> -- .` to restore tracked files), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
+**Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git -C "${PROJECT_ROOT}" checkout <sha> -- .` to restore tracked files), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
 
 Update state file after each commit.
 
@@ -247,17 +247,17 @@ gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DI
 ### Step 2h: Rebase Check
 
 ```bash
-git fetch origin "${BASE_BRANCH}"
+git -C "${PROJECT_ROOT}" fetch origin "${BASE_BRANCH}"
 ```
 ```bash
-git merge-base HEAD "origin/${BASE_BRANCH}"
+git -C "${PROJECT_ROOT}" merge-base HEAD "origin/${BASE_BRANCH}"
 ```
 
 If base moved: rebase, abort+notify on conflict, run gates if success. Set `rebasedThisRound` in state.
 
 ### Step 2i: Push
 
-If rebased: `git push --force-with-lease origin "${BRANCH}"` — `--force-with-lease` is safe here because it fails if the remote has commits not in your local copy (e.g., another contributor pushed). If it fails, stop and notify the user instead of retrying. Otherwise: `git push origin "${BRANCH}"`.
+If rebased: `git -C "${PROJECT_ROOT}" push --force-with-lease origin "${BRANCH}"` — `--force-with-lease` is safe here because it fails if the remote has commits not in your local copy (e.g., another contributor pushed). If it fails, stop and notify the user instead of retrying. Otherwise: `git -C "${PROJECT_ROOT}" push origin "${BRANCH}"`.
 
 ---
 
@@ -293,7 +293,7 @@ Present status (converged or max rounds), PR link, artifact link, summary metric
 - `reject` dispositions MUST go through the user decision gate
 - MUST FIX committed BEFORE SHOULD FIX (safe rollback checkpoint)
 - Quality gates after every fix batch — never skip
-- Guard empty commits: `git diff --quiet` before committing
+- Guard empty commits: `git -C "${PROJECT_ROOT}" diff --quiet` before committing
 - Quote all bash variables: `"${VAR}"`
 - PR/comment bodies via temp files with `-F body=@file` — never inline
 - State file read/updated after every major step
