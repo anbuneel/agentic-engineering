@@ -227,7 +227,53 @@ model = "your-preferred-model"
 model_reasoning_effort = "high"
 ```
 
-**GitHub Apps (optional):** Install [Claude bot](https://github.com/apps/claude), [Devin](https://github.com/apps/devin-ai-integration), or [OpenAI Codex](https://github.com/apps/openai-codex) on your repo for additional automated PR review coverage. All optional — `/peer-review-code` works with just local Codex CLI.
+**GitHub App Reviewers (optional):** `/peer-review-code` can collect reviews from GitHub-based AI bots in addition to the local Codex CLI review. These are entirely optional — the skill works without them, but each one adds an independent perspective.
+
+| Bot | Install | Setup | What it does |
+|-----|---------|-------|--------------|
+| [Claude bot](https://github.com/apps/claude) | [Install App](https://github.com/apps/claude) | Enable "Auto-review PRs" in the app's repo settings | Reviews PRs as `@claude-bot` comments |
+| [Devin](https://github.com/apps/devin-ai-integration) | [Install App](https://github.com/apps/devin-ai-integration) | Enable PR review triggers in Devin dashboard | Reviews PRs as Devin PR comments |
+| [OpenAI Codex](https://github.com/apps/openai-codex) | [Install App](https://github.com/apps/openai-codex) | Enable auto-review in the Codex GitHub App settings | Reviews PRs as Codex review comments |
+
+After installing, the skill automatically detects bot reviews on your PR and includes them in the counter-review process. No configuration needed in the skill itself — just install the app and enable its auto-review feature.
+
+## Bash Permissions
+
+Claude Code prompts for approval on every Bash command by default. These skills make heavy use of `git`, `gh`, `codex`, and scanning tools — without pre-approved permissions, you'll hit dozens of prompts per run.
+
+**Recommended:** Add these to your `~/.claude/settings.json` to allow skill-related commands:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(codex *)",
+      "Bash(npm audit *)",
+      "Bash(semgrep *)",
+      "Bash(gitleaks *)",
+      "Bash(rm -rf .review/*)"
+    ]
+  }
+}
+```
+
+**What each permission covers:**
+
+| Permission | Used by | Why |
+|---|---|---|
+| `Bash(git *)` | All skills | Branch operations, commits, push, diff |
+| `Bash(gh *)` | `/peer-review-code`, `/merge`, `/security-posture` | PR creation, bot review polling, issue creation |
+| `Bash(codex *)` | `/peer-review-code`, `/peer-review-plan`, `/security-audit` | Codex CLI exec and resume commands |
+| `Bash(npm audit *)` | `/security-scan` | Dependency vulnerability scanning |
+| `Bash(semgrep *)` | `/security-scan` | Static analysis |
+| `Bash(gitleaks *)` | `/security-scan` | Secret detection |
+| `Bash(rm -rf .review/*)` | All skills | Cleanup of temporary review files |
+
+You only need permissions for tools you have installed. If you don't use Codex CLI, skip `Bash(codex *)`. If you don't run `/security-scan`, skip the scanning tool permissions.
+
+**Nuclear option:** `"Bash(*)"` allows all Bash commands — convenient but grants broad access. Use the scoped list above for tighter control.
 
 ## Cross-Platform
 
