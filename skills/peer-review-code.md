@@ -67,14 +67,6 @@ Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: r
 
 ---
 
-### Step 0b: Code Simplification
-
-Launch the built-in **code-simplifier** agent (`code-simplifier`): "Simplify and refine all changes on the current branch compared to the base branch. Focus on clarity, consistency, and maintainability while preserving exact functionality."
-
-If changes made: run quality gates (lint, typecheck, test, build — each as a separate command). If pass, commit `"refactor: code simplification pass"`. If fail, revert and notify user.
-
----
-
 ### Step 1: Pre-Review (Claude runs natively)
 
 Launch pr-review-toolkit agents in parallel:
