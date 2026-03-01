@@ -15,7 +15,10 @@ Send the current implementation plan to OpenAI Codex CLI for peer review. Claude
    ```bash
    git rev-parse --show-toplevel
    ```
-   Store as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
+   Store as `PROJECT_ROOT`. **Bash safety rules for the entire skill:**
+   - **Never use `cd`** — use `-C "${PROJECT_ROOT}"` and absolute paths
+   - **Never use `$()`** command substitution — run commands standalone, parse output natively
+   - **Never pipe to `jq`** — parse JSON natively in-context
 2. Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 3. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 4. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.

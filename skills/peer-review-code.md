@@ -29,7 +29,10 @@ Run ALL checks — stop if any fail:
 git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 ```
 
-Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
+Store the toplevel path as `PROJECT_ROOT`. **Bash safety rules for the entire skill:**
+- **Never use `cd`** — use `git -C "${PROJECT_ROOT}"` and absolute paths
+- **Never use `$()`** command substitution — run commands standalone, parse output natively
+- **Never pipe to `jq`** — parse JSON natively in-context
 
 ```bash
 git status --porcelain

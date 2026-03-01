@@ -29,7 +29,10 @@ git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
 
-Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
+Store the toplevel path as `PROJECT_ROOT`. **Bash safety rules for the entire skill:**
+- **Never use `cd`** — use absolute paths everywhere
+- **Never use `$()`** command substitution — run commands standalone, parse output natively
+- **Never pipe to `jq`** — parse JSON natively in-context
 
 ### Step 1b: Generate Scan ID
 
