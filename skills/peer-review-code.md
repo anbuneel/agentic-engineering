@@ -26,8 +26,11 @@ When invoked, execute the following phases sequentially.
 Run ALL checks — stop if any fail:
 
 ```bash
-git rev-parse --is-inside-work-tree
+git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
 ```
+
+Store the toplevel path as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
+
 ```bash
 git status --porcelain
 ```
@@ -169,14 +172,14 @@ Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_com
 
 **Round 1** (no `nextCodexCommand` in state):
 ```bash
-codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
+codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Capture `CODEX_SESSION_ID` from output. Build the next round's resume command and save BOTH to state file:
 ```json
 {
   "codexSessionId": "<captured ID>",
-  "nextCodexCommand": "codex exec resume \"<captured ID>\" \"Code has been updated. [PLACEHOLDER_FOR_CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE\""
+  "nextCodexCommand": "codex exec resume \"<captured ID>\" -C \"${PROJECT_ROOT}\" \"Code has been updated. [PLACEHOLDER_FOR_CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE\""
 }
 ```
 
@@ -186,7 +189,7 @@ Read `nextCodexCommand` from state file. Replace `[PLACEHOLDER_FOR_CHANGE_SUMMAR
 
 After running, update `nextCodexCommand` in state file with the same session ID for the next potential round.
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
+**If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
 
 ### Step 2c: Consolidate
 

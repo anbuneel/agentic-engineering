@@ -11,15 +11,21 @@ Send the current implementation plan to OpenAI Codex CLI for peer review. Claude
 
 ### Step 1: Setup
 
-1. Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
-2. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
-3. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.
+1. Detect the project root:
+   ```bash
+   git rev-parse --show-toplevel
+   ```
+   Store as `PROJECT_ROOT`. Use absolute paths throughout — **never use `cd`**.
+2. Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
+3. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
+4. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.
 
 ### Step 2: Codex Review (Round 1)
 
 ```bash
 codex exec \
   -s read-only \
+  -C "${PROJECT_ROOT}" \
   -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" \
   "Review this plan thoroughly: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md
 
@@ -74,12 +80,12 @@ If no reject/defer items, skip this step.
 4. Resume the Codex session:
 
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_SESSION_ID}" -C "${PROJECT_ROOT}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Resume output goes to stdout — capture from Bash tool result.
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -o "${REVIEW_DIR}/codex-round-N-${REVIEW_ID}.md"` (where N is the current round number) with prior round context.
+**If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-round-N-${REVIEW_ID}.md"` (where N is the current round number) with prior round context.
 
 Go back to **Step 3**.
 
