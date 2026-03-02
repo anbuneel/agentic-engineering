@@ -62,10 +62,10 @@ If the user provided a topic/question with the `/peer-ideate` command, use it. O
 > 3. **Focus areas** — specific aspects to concentrate on (optional)
 > 4. **Constraints** — anything to rule out (optional)
 
-Store the full brief. If attachments are provided:
-- Files within the project → note paths for inclusion in prompts
-- Files outside the project → copy into `${IDEATION_DIR}/` using Read then Write tools
-- **Images:** Claude reads images natively. Gemini can reference project-local images via `@./path` in its prompt. Codex has limited image support — include a text description alongside image references for the Codex prompt.
+Store the full brief. If attachments are provided (screenshots, files, code):
+- Files within the project → store their **absolute paths** in a list called `ATTACHMENT_PATHS`
+- Files outside the project → copy into `${IDEATION_DIR}/` using Read then Write tools, then add the new path to `ATTACHMENT_PATHS`
+- **CRITICAL: Never summarize or describe attachments as text substitutes. Always pass the actual file paths to each model so they can read/view the files themselves.**
 
 Write the brief to `${IDEATION_DIR}/brief-${SESSION_ID}.md`.
 
@@ -104,17 +104,22 @@ Run all available models **in parallel**:
 - If the topic is **UI/UX related** (design feedback, layout, styling, components, visual improvements), use `subagent_type: frontend-design` — this leverages the specialized frontend-design skill for higher-quality UI/UX output
 - For **all other topics** (architecture, naming, API design, performance, etc.), use `subagent_type: general-purpose`
 - Prompt with the base template
-- The agent can use Read tool for any referenced files/images
+- **Include each attachment path with an explicit instruction:** "Use the Read tool to view the file at [absolute path]" — for images this gives Claude native multimodal viewing
 - Save the agent's response to `${IDEATION_DIR}/claude-ideation-${SESSION_ID}.md` using the Write tool
 
 **Codex** (if `HAS_CODEX`):
+- Codex can read project files via its internal tools. Include the **absolute file paths** in the prompt and instruct: "Read and analyze the file at [path]"
+- Codex has limited image interpretation in headless mode — for image attachments, still include the path but note that Codex may not be able to render images visually
 ```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" -o "${IDEATION_DIR}/codex-ideation-${SESSION_ID}.md" "[base prompt with absolute file paths for any attachments]"
+codex exec -s read-only -C "${PROJECT_ROOT}" -o "${IDEATION_DIR}/codex-ideation-${SESSION_ID}.md" "[base prompt]. Read and analyze the following files: [absolute path for each attachment]"
 ```
 
 **Gemini** (if `HAS_GEMINI`):
+- Include each attachment using Gemini's `@` file reference syntax inline in the prompt: `@./relative/path/to/file`
+- For files copied into `${IDEATION_DIR}/`, use the path relative to the project root (e.g., `@./.review/screenshot.png`)
+- Gemini can natively view images, PDFs, and text files via `@` references
 ```bash
-gemini -p "[base prompt with @./relative-path references for project-local attachments]. Do NOT modify any files." -y > "${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md"
+gemini -p "[base prompt]. Analyze the following files: @./relative/path/to/attachment1 @./relative/path/to/attachment2. Do NOT modify any files." -y > "${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md"
 ```
 
 Wait for all to complete. Read all output files.
