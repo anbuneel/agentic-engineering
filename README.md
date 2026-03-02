@@ -12,16 +12,17 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 - [Claude Code](https://claude.ai/code) (primary target) — skills work as slash commands out of the box
 - Git and a GitHub repo for most workflows
 
-**Optional:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`) — OpenAI's command-line coding agent. The peer-review skills use it as a **second reviewer from a different model**, so you get an independent perspective instead of Claude reviewing its own work. Without Codex, those two skills won't run, but the other four work fine on their own.
+**Optional:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`) and [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`) — used as independent model voices in multi-agent workflows. Without them, skills degrade gracefully (see table).
 
-| Skill | Needs Codex? |
-|-------|-------------|
-| `/peer-review-code` | Yes |
-| `/peer-review-plan` | Yes |
-| `/security-posture` | No |
-| `/security-scan` | No |
-| `/security-audit` | No (optional second opinion) |
-| `/merge` | No |
+| Skill | Needs Codex? | Needs Gemini? |
+|-------|-------------|---------------|
+| `/peer-review-code` | Yes | No |
+| `/peer-review-plan` | Yes | No |
+| `/peer-ideate` | Optional | Optional |
+| `/security-posture` | No | No |
+| `/security-scan` | No | No |
+| `/security-audit` | No (optional) | No |
+| `/merge` | No | No |
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
@@ -81,6 +82,22 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews → Claude counter-reviews with dispositions → you resolve disputes → Claude revises → repeat. Min 2 rounds, max 5. Same counter-review and decision gate patterns as code review.
 
 **What makes it different:** Gets a second model's perspective on your architecture before you write any code. Catches blind spots that a single model misses.
+
+### `/peer-ideate` — Multi-Model Brainstorming Council
+
+[`skills/peer-ideate.md`](skills/peer-ideate.md) | Optional: Codex CLI, Gemini CLI
+
+Claude, Codex, and Gemini independently brainstorm on any topic — UI design, architecture, naming, API design, tradeoffs, or any open-ended question. Claude synthesizes the raw responses into a unified findings list, then each model counter-reviews the synthesis. Final report shows consensus ideas, contested points, and unique insights ranked by confidence.
+
+**How it works:**
+
+1. **Capture brief** — topic, optional attachments (screenshots, code), focus areas, constraints
+2. **Parallel ideation** — all three models brainstorm independently (same brief, no cross-talk)
+3. **Synthesis** — Claude merges all responses, tags consensus level, preserves attribution
+4. **Counter-review** — each model dispositions the synthesis (endorse / challenge / enhance / new)
+5. **Final report** — consensus tiers, contested ideas with arguments from both sides, unique insights
+
+**What makes it different:** Three models with different training biases produce genuinely diverse perspectives. The counter-review catches over- and under-weighted ideas. Works with any subset of models — degrades gracefully to Claude alone.
 
 ---
 
@@ -189,6 +206,7 @@ Get-ChildItem agentic-engineering\agents\*.md | ForEach-Object { New-Item -ItemT
 # Skills
 curl -o ~/.claude/commands/peer-review-code.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-review-code.md
 curl -o ~/.claude/commands/peer-review-plan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-review-plan.md
+curl -o ~/.claude/commands/peer-ideate.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-ideate.md
 curl -o ~/.claude/commands/merge.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/merge.md
 curl -o ~/.claude/commands/security-scan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-scan.md
 curl -o ~/.claude/commands/security-audit.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-audit.md
@@ -216,7 +234,8 @@ These are markdown files — any AI agent that can read instructions and execute
 | Tool | Install | Used by |
 |------|---------|---------|
 | [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/peer-review-code`, `/merge`, `/security-posture` (optional) |
-| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | `/peer-review-code`, `/peer-review-plan`, `/security-audit` (optional) |
+| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | `/peer-review-code`, `/peer-review-plan`, `/peer-ideate` (optional), `/security-audit` (optional) |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` | `/peer-ideate` (optional) |
 | [Semgrep](https://semgrep.dev/) | `pip install semgrep` | `/security-scan` (optional) |
 | [Gitleaks](https://github.com/gitleaks/gitleaks) | `brew install gitleaks` | `/security-scan` (optional) |
 
@@ -250,6 +269,7 @@ Claude Code prompts for approval on every Bash command by default. These skills 
       "Bash(git *)",
       "Bash(gh *)",
       "Bash(codex *)",
+      "Bash(gemini *)",
       "Bash(npm audit *)",
       "Bash(semgrep *)",
       "Bash(gitleaks *)",
@@ -265,7 +285,8 @@ Claude Code prompts for approval on every Bash command by default. These skills 
 |---|---|---|
 | `Bash(git *)` | All skills | Branch operations, commits, push, diff |
 | `Bash(gh *)` | `/peer-review-code`, `/merge`, `/security-posture` | PR creation, bot review polling, issue creation |
-| `Bash(codex *)` | `/peer-review-code`, `/peer-review-plan`, `/security-audit` | Codex CLI exec and resume commands |
+| `Bash(codex *)` | `/peer-review-code`, `/peer-review-plan`, `/peer-ideate`, `/security-audit` | Codex CLI exec and resume commands |
+| `Bash(gemini *)` | `/peer-ideate` | Gemini CLI non-interactive prompts |
 | `Bash(npm audit *)` | `/security-scan` | Dependency vulnerability scanning |
 | `Bash(semgrep *)` | `/security-scan` | Static analysis |
 | `Bash(gitleaks *)` | `/security-scan` | Secret detection |

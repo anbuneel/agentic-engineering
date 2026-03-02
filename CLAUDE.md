@@ -10,6 +10,7 @@ Agentic Engineering — a collection of workflow skills and sub-agents for AI co
 skills/          ← User-invoked workflows (/command-name)
   peer-review-code.md
   peer-review-plan.md
+  peer-ideate.md
   merge.md
   security-scan.md
   security-audit.md
@@ -48,6 +49,9 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 - Codex model inherited from `~/.codex/config.toml` — never hardcode `-m`
 - Do NOT use `-a` flag with `codex exec` — it's not supported on the exec subcommand (approvals default to never in non-interactive mode)
 - Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
+- Gemini model inherited from `~/.gemini/settings.json` (`general.model`) — never hardcode `-m`
+- Gemini CLI: use `-p "prompt"` for non-interactive mode, `-y` for auto-approve, redirect stdout for output (`> file.md`)
+- Gemini CLI: `--approval-mode plan` requires experimental flag — use `-y` with explicit "do NOT modify files" in prompt instead
 - Use Read/Write tools for file operations — never `cp`, `mv`, or shell redirects
 - Generate session IDs natively — no Bash calls for setup
 - All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
