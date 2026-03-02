@@ -100,7 +100,9 @@ natural, but make each distinct idea clearly identifiable.
 
 Run all available models **in parallel**:
 
-**Claude** — Launch a Task agent (`subagent_type: general-purpose`):
+**Claude** — Launch a Task agent:
+- If the topic is **UI/UX related** (design feedback, layout, styling, components, visual improvements), use `subagent_type: frontend-design` — this leverages the specialized frontend-design skill for higher-quality UI/UX output
+- For **all other topics** (architecture, naming, API design, performance, etc.), use `subagent_type: general-purpose`
 - Prompt with the base template
 - The agent can use Read tool for any referenced files/images
 - Save the agent's response to `${IDEATION_DIR}/claude-ideation-${SESSION_ID}.md` using the Write tool
