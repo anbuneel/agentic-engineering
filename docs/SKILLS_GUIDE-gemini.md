@@ -74,7 +74,9 @@ A fast hygiene check that gives your project a letter grade (A-F).
 
 ## 🎨 Visual Assets (Generated via Nano Banana 2)
 
-To make this document pop, use the following prompts in **Nano Banana 2** to generate icons or a header image.
+Leverage Google's **Nano Banana 2** (Gemini 3.1 Flash Image) to generate high-quality visual assets, icons, and hero images directly within your project workflow.
+
+**Primary Intent:** Use AI image generation to create visually appealing documentation, UI placeholders, and professional marketing assets that make your repository stand out.
 
 ### 🖼️ Hero Header
 > **Prompt:** *A futuristic, high-detail wide-angle digital illustration of a robotic "Council of Three" AI agents sitting around a holographic table, neon blue and violet accents, glassmorphism style, 8k resolution, cinematic lighting.*
