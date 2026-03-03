@@ -2,7 +2,7 @@
 
 Slash commands for [Claude Code](https://claude.ai/code) that add multi-agent code review, security scanning, and automated documentation workflows. Type `/peer-review-code` and your PR gets reviewed by multiple AI agents, counter-reviewed, and fixed — automatically.
 
-**👉 View the [Visual Skills Guide](docs/SKILLS_GUIDE-gemini.md) for a deep dive into the workflows.**
+**View the [Visual Skills Guide](docs/SKILLS_GUIDE.md) for flow diagrams of every workflow.**
 
 Each skill is a markdown file. Drop it in `~/.claude/commands/`, and it becomes a slash command. No build step, no package manager — just files.
 
