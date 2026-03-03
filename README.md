@@ -56,12 +56,12 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 2. **Pre-review** — Claude's own agents (code-reviewer, silent-failure-hunter, type-design-analyzer) scan in parallel
 3. **PR creation** — pushes the branch and opens a PR if one doesn't exist
 4. **Multi-agent review loop** (2-5 rounds):
-   - Wait for GitHub bot reviews (Claude bot, Devin, Codex) if installed
-   - Codex CLI reviews independently via `codex exec`
+   - Codex CLI and GitHub bot polling run **in parallel** (adaptive timeout: 8 min round 1, 4 min round 2+)
    - Claude **counter-reviews** every finding from every source
+   - GH bot findings are **verified across rounds** — tracked by fingerprint to confirm fixes are accepted
    - You resolve any rejections or deferrals at the **decision gate**
    - Claude fixes agreed findings, commits, pushes
-   - Next round verifies the fixes
+   - Next round verifies the fixes — convergence requires all GH bot findings verified
 5. **Finalize** — deferred items become GitHub issues, review artifact saved to `docs/reviews/`
 
 **Counter-review dispositions:**

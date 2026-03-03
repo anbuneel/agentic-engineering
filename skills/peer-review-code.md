@@ -64,7 +64,19 @@ Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_I
 
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, branch, baseBranch, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound.
+Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, branch, baseBranch, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound, ghBotFindings.
+
+`ghBotFindings` is an array of objects, each tracking a GH bot finding across rounds:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique finding ID (e.g., `gh-1`, `gh-2`) |
+| `source` | string | Bot name (`claude-bot`, `devin`, `codex-gh`, etc.) |
+| `fingerprint` | string | `file:severity:keywords` key for fuzzy matching |
+| `summary` | string | Short description of the finding |
+| `roundRaised` | number | Round the finding first appeared |
+| `roundFixed` | number \| null | Round the fix was committed (`null` if not yet fixed) |
+| `verified` | boolean \| null | `true` = resolved, `false` = re-raised after fix, `null` = pending next poll |
 
 **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth for variables like `CODEX_SESSION_ID`, `round`, and `nextCodexCommand`. Always re-read it before acting.**
 
@@ -72,7 +84,15 @@ Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: r
 
 ### Step 0b: Code Simplification
 
-Run the built-in `/simplify` skill to review changed code for reuse, quality, and efficiency.
+Check the diff size first:
+
+```bash
+git -C "${PROJECT_ROOT}" diff --stat "${BASE_BRANCH}"...HEAD
+```
+
+Count the total lines changed natively. If < 20 lines changed, skip this step with a note: "Skipping simplification pass (diff < 20 lines)."
+
+Otherwise, run the built-in `/simplify` skill to review changed code for reuse, quality, and efficiency.
 
 If changes made: run quality gates (lint, typecheck, test, build — each as a separate command). If pass, commit `"refactor: code simplification pass"`. If fail, revert and notify user.
 
@@ -147,7 +167,11 @@ Loop for up to 5 rounds.
 
 **CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `BRANCH`, `BASE_BRANCH`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
 
-### Step 2a: Wait Remote
+### Step 2a: Parallel Review (GH Bots + Codex)
+
+Launch GH bot polling and Codex review **concurrently**. They have no dependency on each other.
+
+#### Track A: GH Bot Polling
 
 Resolve owner/repo once:
 
@@ -167,9 +191,11 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
 gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
 ```
 
-Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout (8 minutes). Save to state file.
+Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout. **Adaptive timeout:** Round 1 = 8 minutes (bots may need to initialize); Round 2+ = 4 minutes (bots already warmed up). Save to state file.
 
-### Step 2b: Codex Review
+#### Track B: Codex Review
+
+Run concurrently with Track A (use `run_in_background` for the Bash tool).
 
 **CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If it is missing or null, this is Round 1 — use fresh exec. **Using fresh `codex exec` on round 2+ is a bug.**
 
@@ -194,11 +220,29 @@ After running, update `nextCodexCommand` in state file with the same session ID 
 
 **If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
 
-### Step 2c: Consolidate
+#### Sync Point
 
-Extract findings from all sources (remote comments + Codex output). For each: file, line, severity, description, source agent. Deduplicate using `file:severity:keywords` fingerprints. Update state file.
+Wait for **both** Track A and Track B to complete before proceeding. Collect GH bot comments and Codex output.
 
-### Step 2d: Counter-Review
+### Step 2b: Consolidate
+
+Extract findings from all sources (remote comments + Codex output). For each: file, line, severity, description, source agent. Deduplicate using `file:severity:keywords` fingerprints.
+
+#### GH Bot Finding Verification
+
+After deduplication, cross-reference new GH bot findings against previously-fixed findings in `ghBotFindings`:
+
+1. For each new GH bot finding, compute its `file:severity:keywords` fingerprint.
+2. Match against previously-fixed findings (`roundFixed != null`, `verified == null`) from the **same `source` bot**. Use fuzzy matching — same file + overlapping keywords = likely same finding, even if line number shifted.
+3. If fingerprint matches a previously-fixed finding → set `verified: false` (re-raised). Treat it as a new finding for counter-review.
+4. After processing all new comments from a given bot, any previously-fixed finding from that bot that was **not** re-raised → set `verified: true` (implicitly resolved).
+5. If a bot posted **no new comments** this round (polling timed out with no new IDs from that bot) → set `verified: true` on all its pending findings (implicit approval).
+
+Add any genuinely new GH bot findings (no fingerprint match) to `ghBotFindings` with `roundFixed: null`, `verified: null`.
+
+Update state file.
+
+### Step 2c: Counter-Review
 
 Evaluate every NEW finding. Assign dispositions (agree/partial/defer/reject).
 
@@ -219,17 +263,18 @@ If there are **reject** or **defer** dispositions, present each to the user with
 
 Update dispositions in state file.
 
-### Step 2e: Check Convergence
+### Step 2d: Check Convergence
 
-**Note:** Convergence is checked AFTER Step 2d (counter-review) but BEFORE Step 2f (fix). The `fixesMadeThisRound` flag refers to whether Step 2f will produce commits — i.e., whether there are `agree` or `partial` dispositions from this round's counter-review.
+**Note:** Convergence is checked AFTER Step 2c (counter-review) but BEFORE Step 2e (fix). The `fixesMadeThisRound` flag refers to whether Step 2e will produce commits — i.e., whether there are `agree` or `partial` dispositions from this round's counter-review.
 
 - **Minimum 2 rounds required** — never exit before Round 2
 - **If fixes will be made this round** (any `agree` or `partial` dispositions) → **not converged** — a verification round is needed after every fix
-- Round ≥ 2 AND no fixes this round AND all MUST FIX resolved AND no net new findings → **converged**
-- Round ≥ 2 AND no fixes this round AND Codex APPROVED AND no unresolved MUST FIX → **converged**
+- **If any GH bot finding has `verified: false`** (re-raised after fix) → **not converged** — the re-raised finding must be re-processed through counter-review
+- Round ≥ 2 AND no fixes this round AND all MUST FIX resolved AND no net new findings AND **all fixed GH bot findings `verified: true`** → **converged**
+- Round ≥ 2 AND no fixes this round AND Codex APPROVED AND no unresolved MUST FIX AND **all fixed GH bot findings `verified: true`** → **converged**
 - Max rounds → exit with warning
 
-### Step 2f: Fix
+### Step 2e: Fix
 
 Fix all `agree` and `partial` findings using Edit/Write tools.
 
@@ -237,9 +282,11 @@ Fix all `agree` and `partial` findings using Edit/Write tools.
 
 **Then SHOULD FIX.** Run quality gates. If fail → revert to checkpoint (`git -C "${PROJECT_ROOT}" checkout <sha> -- .` to restore tracked files), defer all SHOULD FIX. If pass and changes exist, commit `"fix: round ${ROUND} should-fix findings"`.
 
+After each commit, update `ghBotFindings` — for every GH bot finding fixed this round, set `roundFixed` to the current round and `verified` to `null` (pending verification next poll).
+
 Update state file after each commit.
 
-### Step 2g: Post Round Summary
+### Step 2f: Post Round Summary
 
 Write summary to `${REVIEW_DIR}/round-summary-${REVIEW_ID}.md`, post:
 
@@ -247,7 +294,7 @@ Write summary to `${REVIEW_DIR}/round-summary-${REVIEW_ID}.md`, post:
 gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/round-summary-${REVIEW_ID}.md"
 ```
 
-### Step 2h: Rebase Check
+### Step 2g: Rebase Check
 
 ```bash
 git -C "${PROJECT_ROOT}" fetch origin "${BASE_BRANCH}"
@@ -258,7 +305,7 @@ git -C "${PROJECT_ROOT}" merge-base HEAD "origin/${BASE_BRANCH}"
 
 If base moved: rebase, abort+notify on conflict, run gates if success. Set `rebasedThisRound` in state.
 
-### Step 2i: Push
+### Step 2h: Push
 
 If rebased: `git -C "${PROJECT_ROOT}" push --force-with-lease origin "${BRANCH}"` — `--force-with-lease` is safe here because it fails if the remote has commits not in your local copy (e.g., another contributor pushed). If it fails, stop and notify the user instead of retrying. Otherwise: `git -C "${PROJECT_ROOT}" push origin "${BRANCH}"`.
 

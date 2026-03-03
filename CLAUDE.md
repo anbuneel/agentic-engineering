@@ -42,7 +42,7 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 
 - **Counter-review**: Agent assigns dispositions (agree/partial/defer/reject) to every finding before acting
 - **Decision gate**: User breaks ties on reject AND defer — nothing silently ignored
-- **Convergence loop**: Min 2 rounds (review + re-review), max 5. Exits when all MUST FIX resolved and fixes verified
+- **Convergence loop**: Min 2 rounds (review + re-review), max 5. Exits when all MUST FIX resolved, fixes verified, and all GH bot findings confirmed resolved via cross-round fingerprint tracking
 
 ## Skill Design Rules
 
