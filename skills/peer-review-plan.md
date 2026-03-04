@@ -1,3 +1,13 @@
+---
+name: peer-review-plan
+description: >
+  Send an implementation plan to Codex CLI for peer review, with Claude
+  performing counter-review on each finding. Use when the user wants a
+  second opinion on a plan, asks to review a plan with another model,
+  or says "have Codex review this plan", "get feedback on my plan", or
+  "peer review the plan". Best used during or after plan mode.
+---
+
 # Peer Review Plan (Iterative with Counter-Review)
 
 Send the current implementation plan to OpenAI Codex CLI for peer review. Claude performs a **counter-review** on each round of Codex feedback — assigning dispositions (agree/partial/defer/reject) to every finding before revising. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
@@ -21,25 +31,30 @@ Send the current implementation plan to OpenAI Codex CLI for peer review. Claude
    - **Never pipe to `jq`** — parse JSON natively in-context
 2. Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 3. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
-4. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.
+4. Initialize state file `${REVIEW_DIR}/plan-review-state-${REVIEW_ID}.json` tracking: `reviewId`, `round` (starts at 1), `codexThreadId` (starts as null), `planFile`, `findings`, `dispositions`.
+
+   **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth. Always re-read it before acting.**
+
+5. Read the plan file with the **Read** tool, write it to `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md` with the **Write** tool. If no plan exists in context, ask the user.
 
 ### Step 2: Codex Review (Round 1)
 
 ```bash
-codex exec \
+codex exec --json \
   -s read-only \
   -C "${PROJECT_ROOT}" \
-  -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" \
   "Review this plan thoroughly: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md
 
 End with exactly: VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Capture the `session id: <uuid>` from output. Store as `CODEX_SESSION_ID`.
+The `--json` flag outputs structured JSONL. The first line is always `{"type":"thread.started","thread_id":"<UUID>"}`. Parse `thread_id` and save as `codexThreadId` in the state file immediately — this survives context compaction. Extract review content from `item.completed` events (the `text` field) and write to `${REVIEW_DIR}/codex-review-${REVIEW_ID}.md`.
 
 ### Step 3: Read Review & Check Verdict
 
-1. Read the Codex output file (or stdout for resume rounds).
+**At the start of EVERY round, read the state file and restore all variables** (`REVIEW_ID`, `REVIEW_DIR`, `PROJECT_ROOT`, `codexThreadId`, `round`). After context compaction these values exist ONLY in the state file.
+
+1. Extract the review content from the JSONL output (`item.completed` events, `text` field). Write to `${REVIEW_DIR}/codex-review-round-${ROUND}-${REVIEW_ID}.md`.
 2. Check verdict:
    - **Minimum 2 rounds required** — never exit before Round 2
    - Round ≥ 2 AND **VERDICT: APPROVED** → go to Step 7 (Done)
@@ -80,17 +95,17 @@ If no reject/defer items, skip this step.
 1. Apply all `agree` and `partial` findings. Skip `reject` (user-confirmed) and `defer`.
 2. Rewrite `${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md`.
 3. Summarize to the user: what changed, what's deferred, what's rejected.
-4. Resume the Codex session:
+4. Resume the Codex session using the `codexThreadId` from the state file:
 
 ```bash
-codex exec resume "${CODEX_SESSION_ID}" -C "${PROJECT_ROOT}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_THREAD_ID}" --json -s read-only -C "${PROJECT_ROOT}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Resume output goes to stdout — capture from Bash tool result.
+Extract review content from `item.completed` events as in Round 1.
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-round-N-${REVIEW_ID}.md"` (where N is the current round number) with prior round context.
+**If resume fails**, fall back to fresh `codex exec --json -s read-only -C "${PROJECT_ROOT}"` with prior round context. Capture the new `thread_id` and update state.
 
-Go back to **Step 3**.
+5. Increment `round` in the state file. Go back to **Step 3**.
 
 ### Step 7: Write Review Artifact
 

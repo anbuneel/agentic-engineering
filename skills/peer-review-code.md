@@ -1,3 +1,14 @@
+---
+name: peer-review-code
+description: >
+  Orchestrate multi-agent code review with Codex CLI and GitHub bots,
+  with Claude performing counter-review on every finding. Use when the
+  user wants code reviewed by multiple AI agents, asks for peer review,
+  multi-model code review, or automated review on a feature branch.
+  Also use for "review my PR", "get feedback on my code from other
+  models", or "run code review with multiple agents".
+---
+
 # Peer Review Code (Multi-Agent with Counter-Review)
 
 Orchestrate an automated code review across multiple AI agents (Codex CLI, GitHub-connected bots) with Claude as the central coordinator. Claude performs a **counter-review** on every finding — assigning dispositions (agree/partial/defer/reject) before fixing. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
@@ -26,7 +37,10 @@ When invoked, execute the following phases sequentially.
 Run ALL checks — stop if any fail:
 
 ```bash
-git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
+git rev-parse --is-inside-work-tree
+```
+```bash
+git rev-parse --show-toplevel
 ```
 
 Store the toplevel path as `PROJECT_ROOT`. **Bash safety rules for the entire skill:**
@@ -62,9 +76,11 @@ codex --version
 
 Generate a random 8-character hex string natively (not Bash). Store as `REVIEW_ID`.
 
+**Detect quality gates** — read `package.json` (or equivalent project config) and identify which of these scripts exist: `lint`, `typecheck`/`tsc`, `test`, `build`. Store the available gate commands in the state file as `qualityGates` (e.g., `["npm run lint", "npm run build"]`). Only these gates run after fix batches — don't fail looking for gates the project doesn't have.
+
 Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
 
-Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, branch, baseBranch, codexSessionId, nextCodexCommand, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound, ghBotFindings.
+Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: reviewId, round, branch, baseBranch, codexThreadId, prNumber, seenCommentIds, findings, dispositions, rebasedThisRound, ghBotFindings.
 
 `ghBotFindings` is an array of objects, each tracking a GH bot finding across rounds:
 
@@ -78,7 +94,7 @@ Initialize state file `${REVIEW_DIR}/review-state-${REVIEW_ID}.json` tracking: r
 | `roundFixed` | number \| null | Round the fix was committed (`null` if not yet fixed) |
 | `verified` | boolean \| null | `true` = resolved, `false` = re-raised after fix, `null` = pending next poll |
 
-**CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth for variables like `CODEX_SESSION_ID`, `round`, and `nextCodexCommand`. Always re-read it before acting.**
+**CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth for variables like `codexThreadId`, `round`, and `PR_NUMBER`. Always re-read it before acting.**
 
 ---
 
@@ -165,7 +181,7 @@ Update state file.
 
 Loop for up to 5 rounds.
 
-**CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `BRANCH`, `BASE_BRANCH`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
+**CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `BRANCH`, `BASE_BRANCH`, `codexThreadId`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
 
 ### Step 2a: Parallel Review (Codex + GH Bots)
 
@@ -173,35 +189,25 @@ Loop for up to 5 rounds.
 
 **Task 1: Codex Review** — run as a background Bash command (`run_in_background: true`).
 
-**CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If both are null, use fresh exec (Round 1, or session ID was not captured).
+Read the state file BEFORE choosing which command to run. Check `codexThreadId`.
 
-**Round 1** (no `nextCodexCommand` in state):
+**Round 1** (`codexThreadId` is null in state):
 ```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
+codex exec --json -s read-only -C "${PROJECT_ROOT}" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Search the Bash tool output for a session ID (look for patterns like `session:`, `Session ID:`, a UUID, or a hex string identifier in the codex output). If found, save it and build the resume command:
-```json
-{
-  "codexSessionId": "<captured ID>",
-  "nextCodexCommand": "codex exec resume \"<captured ID>\" -C \"${PROJECT_ROOT}\" \"Code has been updated. [PLACEHOLDER_FOR_CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE\""
-}
+The `--json` flag outputs structured JSONL. The **first line** is always `{"type":"thread.started","thread_id":"<UUID>"}`. Parse `thread_id` from this line and save it as `codexThreadId` in the state file immediately — this is the only reliable way to preserve it across context compaction.
+
+Extract the review content from `item.completed` events in the JSONL output (the `text` field). Write the consolidated review text to `${REVIEW_DIR}/codex-review-${REVIEW_ID}.md`.
+
+**Round 2+** (`codexThreadId` exists in state):
+```bash
+codex exec resume "${CODEX_THREAD_ID}" --json -s read-only -C "${PROJECT_ROOT}" "Code has been updated. [CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-**If no session ID found**, log a warning to the user: "Could not capture Codex session ID from output — Round 2+ will use fresh exec with context." Save `codexSessionId: null` and `nextCodexCommand: null` to state.
+Replace `[CHANGE_SUMMARY]` with a summary of fixes made this round. Extract review content from `item.completed` events as in Round 1. The `thread_id` stays the same across resumes — no need to re-capture.
 
-**Round 2+:**
-
-Read `codexSessionId` and `nextCodexCommand` from state file.
-
-- **If `nextCodexCommand` exists** → use it verbatim. Replace `[PLACEHOLDER_FOR_CHANGE_SUMMARY]` with a summary of fixes made this round. Resume output goes to stdout — capture from Bash tool result. Update `nextCodexCommand` in state for the next potential round.
-- **If `nextCodexCommand` is null** (session ID was not captured) → use fresh exec with prior-round context:
-  ```bash
-  codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "This is Round N of a multi-round review. Previous round found these issues: [SUMMARY_OF_PRIOR_FINDINGS]. Fixes applied: [SUMMARY_OF_FIXES]. Re-review all changes on this branch compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
-  ```
-  Again attempt to capture session ID from output for subsequent rounds.
-
-**If resume fails**, fall back to fresh exec with prior-round context (same as null case above). Update state to clear `nextCodexCommand` and attempt to capture new session ID.
+**If resume fails** (e.g., session expired or corrupted), fall back to fresh `codex exec --json` (same as Round 1). Capture the new `thread_id` and update state.
 
 **Task 2: GH Bot Polling** — run in parallel with Task 1 (launch in the same message).
 
@@ -224,6 +230,8 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
 ```
 
 Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout. **Adaptive timeout:** Round 1 = 8 minutes (bots may need to initialize); Round 2+ = 4 minutes (bots already warmed up). Save to state file.
+
+**No-bots short-circuit:** If Round 1 polling times out with zero new comments from any bot, set `ghBotsActive: false` in state. In Round 2+, if `ghBotsActive` is false, skip Task 2 entirely — no bots are configured and polling would just waste time. If a bot does appear in a later round (e.g., user installs one mid-review), the Codex sync point still works normally.
 
 #### Sync Point
 
@@ -293,10 +301,10 @@ Update state file after each commit.
 
 ### Step 2f: Post Round Summary
 
-Write summary to `${REVIEW_DIR}/round-summary-${REVIEW_ID}.md`, post:
+Write summary to `${REVIEW_DIR}/round-${ROUND}-summary-${REVIEW_ID}.md`, post:
 
 ```bash
-gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/round-summary-${REVIEW_ID}.md"
+gh api "repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" -F "body=@${REVIEW_DIR}/round-${ROUND}-summary-${REVIEW_ID}.md"
 ```
 
 ### Step 2g: Rebase Check

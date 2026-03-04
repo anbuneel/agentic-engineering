@@ -1,3 +1,13 @@
+---
+name: security-scan
+description: >
+  Run SAST, dependency vulnerability, and secret detection scans against
+  the codebase. Use when the user wants to scan for vulnerabilities,
+  check for secrets, run security checks, or says "scan for security
+  issues", "check for vulnerabilities", "find leaked secrets", or
+  "security scan before merging".
+---
+
 # Security Scan
 
 Run SAST, dependency vulnerability, and secret detection scans against the entire codebase. Generates a consolidated security report.
@@ -28,7 +38,10 @@ When invoked, execute the following phases sequentially.
 ### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
+git rev-parse --is-inside-work-tree
+```
+```bash
+git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
@@ -81,7 +94,7 @@ If **zero** tools are available, stop: "No scanning tools available. Install at 
 
 ## Phase 2: Scan
 
-Run each available tool sequentially. Skip unavailable tools.
+Run all available tools **in parallel** (they are independent). Skip unavailable tools.
 
 ### Step 2a: SAST — Semgrep
 
@@ -240,6 +253,6 @@ Present to the user:
 - **Secret values NEVER written** to the artifact or presented to the user — redact always, only show type and location
 - Quote all bash variables: `"${VAR}"`
 - Non-zero exit codes from scanning tools are expected when findings exist — check stderr for actual errors
-- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks, cleanup) into single calls. Only keep scan commands separate since each tool needs individual exit-code handling.
+- Run each Bash command as a standalone call — never chain with `&&` or `$()`
 - Do NOT commit the scan report automatically — let the user decide
 - Do NOT modify any source code — this skill is read-only analysis

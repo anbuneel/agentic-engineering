@@ -1,3 +1,12 @@
+---
+name: merge
+description: >
+  Squash-merge the current PR and update all project documentation in
+  one step. Use when the user wants to merge a PR, says "merge this",
+  "squash and merge", "merge and update docs", or is done with a
+  feature branch and ready to merge into the default branch.
+---
+
 # Merge & Document
 
 Squash-merge the current PR and update all project documentation. Follow these steps exactly.
@@ -26,6 +35,13 @@ Run ALL checks — stop if any fail:
 ```bash
 git rev-parse --is-inside-work-tree
 ```
+```bash
+git rev-parse --show-toplevel
+```
+
+Store the toplevel path as `PROJECT_ROOT`. **Bash safety rules for the entire skill:**
+- **Never use `cd`** — use `git -C "${PROJECT_ROOT}"` and absolute paths
+- **Never use `$()`** command substitution — run commands standalone, parse output natively
 
 ```bash
 gh auth status
@@ -61,19 +77,21 @@ gh pr view --json number,title,state,mergeable,baseRefName
 
 Parse JSON natively. Store `baseRefName` as `TARGET_BRANCH` — this is the branch the PR merges into (may differ from the repo default branch in release/hotfix flows).
 
-Print the PR number, title, and target branch to the user for confirmation before proceeding.
+Present the PR number, title, and target branch to the user. **Wait for explicit confirmation before proceeding** — merging is irreversible. Do NOT continue to Step 2 until the user confirms.
 
 ---
 
 ### Step 2: Squash-Merge
 
 ```bash
-gh pr merge --squash
+gh pr merge --squash --delete-branch
 ```
+
+The `--delete-branch` flag removes the remote branch after merge, preventing stale branches from accumulating.
 
 If the merge fails:
 - **Merge conflict** → STOP and report the conflict details to the user. Do NOT attempt to resolve conflicts without user input.
-- **CI checks failing** → Report which checks failed. Ask the user whether to merge anyway with `gh pr merge --squash --admin` or wait.
+- **CI checks failing** → Report which checks failed and recommend waiting for CI to pass. Only mention `gh pr merge --squash --delete-branch --admin` as a last resort — warn that it bypasses branch protection and could merge broken code.
 - **Any other error** → Report the exact error message and stop.
 
 ---
@@ -81,17 +99,17 @@ If the merge fails:
 ### Step 3: Switch to Target Branch
 
 ```bash
-git checkout "${TARGET_BRANCH}"
+git -C "${PROJECT_ROOT}" checkout "${TARGET_BRANCH}"
 ```
 
 ```bash
-git pull
+git -C "${PROJECT_ROOT}" pull
 ```
 
 Verify the merge commit is present:
 
 ```bash
-git log --oneline -1
+git -C "${PROJECT_ROOT}" log --oneline -1
 ```
 
 ---
@@ -114,10 +132,16 @@ Read each file before editing. Only update files that exist — do NOT create ne
 
 Only if files were actually modified in Step 4:
 
+Run each as a separate command:
+
 ```bash
-git add <specific files changed>
-git commit -m "docs: update project docs after merging PR #<number>"
-git push
+git -C "${PROJECT_ROOT}" add <specific files changed>
+```
+```bash
+git -C "${PROJECT_ROOT}" commit -m "docs: update project docs after merging PR #<number>"
+```
+```bash
+git -C "${PROJECT_ROOT}" push
 ```
 
 If no docs needed updating, skip this step entirely. Do NOT create empty commits.
@@ -129,7 +153,7 @@ If no docs needed updating, skip this step entirely. Do NOT create empty commits
 Delete the merged branch locally if it still exists:
 
 ```bash
-git branch -d <branch-name>
+git -C "${PROJECT_ROOT}" branch -d <branch-name>
 ```
 
 Use `-d` (safe delete), NOT `-D`. If the branch isn't fully merged for some reason, report it instead of force-deleting.

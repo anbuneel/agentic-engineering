@@ -1,3 +1,15 @@
+---
+name: peer-ideate
+description: >
+  Gather independent perspectives from Claude, Codex, and Gemini on any
+  topic — architecture, naming, API design, UI, tradeoffs. All three
+  brainstorm in parallel, then Claude synthesizes. Use when the user
+  wants multi-model brainstorming, a "second opinion" from multiple
+  models, says "let's brainstorm", "get ideas from different models",
+  "what do other models think", or wants diverse AI perspectives on a
+  decision.
+---
+
 # Peer Ideate (Multi-Model Council)
 
 Gather independent perspectives from Claude, Codex, and Gemini on any topic — UI design, architecture, naming, API design, tradeoffs, or any question where diverse viewpoints add value. All three models brainstorm in parallel, then Claude synthesizes and each model counter-reviews the synthesis.
@@ -48,6 +60,10 @@ Minimum requirement: Claude alone. Warn the user if fewer than 3 models are avai
 Generate a random 8-character hex string natively (not Bash). Store as `SESSION_ID`.
 
 Set `IDEATION_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
+
+Initialize state file `${IDEATION_DIR}/ideation-state-${SESSION_ID}.json` tracking: `sessionId`, `projectRoot`, `ideationDir`, `hasCodex`, `hasGemini`, `deepenRound` (starts at 0), `attachmentPaths`.
+
+**CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth. Always re-read it before acting.**
 
 ---
 
@@ -119,8 +135,9 @@ codex exec -s read-only -C "${PROJECT_ROOT}" -o "${IDEATION_DIR}/codex-ideation-
 - For files copied into `${IDEATION_DIR}/`, use the path relative to the project root (e.g., `@./.review/screenshot.png`)
 - Gemini can natively view images, PDFs, and text files via `@` references
 ```bash
-gemini -p "[base prompt]. Analyze the following files: @./relative/path/to/attachment1 @./relative/path/to/attachment2. Do NOT modify any files." -y > "${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md"
+gemini -p "[base prompt]. Analyze the following files: @./relative/path/to/attachment1 @./relative/path/to/attachment2. Do NOT modify any files." -y
 ```
+Capture the output from the Bash tool result and write it to `${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md` using the Write tool.
 
 Wait for all to complete. Read all output files.
 
@@ -176,8 +193,9 @@ codex exec -s read-only -C "${PROJECT_ROOT}" -o "${IDEATION_DIR}/codex-counter-$
 
 **Gemini** (if `HAS_GEMINI`):
 ```bash
-gemini -p "[counter-review prompt]. Do NOT modify any files." -y > "${IDEATION_DIR}/gemini-counter-${SESSION_ID}.md"
+gemini -p "[counter-review prompt]. Do NOT modify any files." -y
 ```
+Capture the output from the Bash tool result and write it to `${IDEATION_DIR}/gemini-counter-${SESSION_ID}.md` using the Write tool.
 
 **Claude** also performs its own counter-review natively — evaluating the synthesis critically, especially ideas from Codex and Gemini that Claude may have over- or under-weighted during synthesis.
 

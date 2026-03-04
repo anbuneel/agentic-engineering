@@ -1,3 +1,13 @@
+---
+name: security-posture
+description: >
+  Fast security hygiene baseline check — produces a scorecard with
+  PASS/FAIL/N/A and a letter grade. Read-only. Use when the user wants
+  a quick security health check, infrastructure review, or says "how's
+  our security", "security scorecard", "check security posture", or
+  "quick security check before shipping".
+---
+
 # Security Posture Check
 
 Run a fast security hygiene baseline check against a project's infrastructure and configuration. Produces a scorecard with PASS / FAIL / N/A per check and a letter grade. **Read-only — no code modifications.**
@@ -24,7 +34,10 @@ When invoked, execute the following phases sequentially.
 ### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
+git rev-parse --is-inside-work-tree
+```
+```bash
+git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
@@ -392,7 +405,7 @@ Present to the user:
 - **Never use `cd`** — use absolute paths everywhere
 - Use Read/Glob tools for file checks — not Bash (except for git/gh commands)
 - Quote all bash variables: `"${VAR}"`
-- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks) into single calls. Only keep separate commands where individual exit-code handling is needed.
+- Run each Bash command as a standalone call — never chain with `&&` or `$()`
 - **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
 - Do NOT commit the report automatically — let the user decide
 - N/A checks excluded from scoring — never penalize for inapplicable checks

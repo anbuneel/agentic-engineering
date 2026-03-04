@@ -1,3 +1,14 @@
+---
+name: security-audit
+description: >
+  Multi-agent AI security review of the entire codebase — Claude
+  coordinates pr-review-toolkit agents and Codex CLI with counter-review
+  on every finding. Read-only, no code modifications. Use when the user
+  wants a deep AI-powered security audit, full codebase security
+  analysis, or says "audit security", "comprehensive security review",
+  or "check the whole codebase for security issues".
+---
+
 # Security Audit (Full-Codebase AI Analysis)
 
 Orchestrate a multi-agent AI security review of the entire codebase. Claude coordinates pr-review-toolkit agents and optionally Codex CLI, performs a counter-review on every finding, and generates a comprehensive security report. **Read-only — no code modifications.**
@@ -24,7 +35,10 @@ When invoked, execute the following phases sequentially.
 ### Step 1a: Verify Git Repo & Detect Project Root
 
 ```bash
-git rev-parse --is-inside-work-tree && git rev-parse --show-toplevel
+git rev-parse --is-inside-work-tree
+```
+```bash
+git rev-parse --show-toplevel
 ```
 
 If not inside a git repo, stop: "Not a git repository. Run this from inside a project."
@@ -162,10 +176,10 @@ Update state file with all Claude findings.
 Read the state file to restore variables.
 
 ```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" "You are a security auditor. Perform a comprehensive security review of this entire codebase. Check for: injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. For each finding report: SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), file path, line number, vulnerability type, and detailed description. End with a count of findings by severity."
+codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-security-${REVIEW_ID}.md" "You are a security auditor. Perform a comprehensive security review of this entire codebase. Check for: injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. For each finding report: SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), file path, line number, vulnerability type, and detailed description. End with a count of findings by severity."
 ```
 
-Note: Codex output goes to stdout — capture from Bash tool result. Parse findings from the output.
+Read the output file with the Read tool. Parse findings from the content.
 
 Update state file with Codex findings.
 
@@ -330,8 +344,6 @@ This is an AI-powered analysis and may contain false positives or miss vulnerabi
 
 ### Step 7a: Cleanup
 
-Delete the state file:
-
 Delete the state file: `rm -f "${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json"` (single Bash command, permission prompt expected).
 
 ### Step 7b: Present Results
@@ -357,5 +369,5 @@ Present to the user:
 - Codex model inherited from `~/.codex/config.toml` — do not hardcode `-m`
 - Always `-s read-only` for Codex
 - Do NOT commit the report automatically — let the user decide
-- Fix code via Edit/Write tools — NEVER spawn `claude -p` or Claude subprocess
-- **Minimize permission prompts** — combine related Bash commands (e.g., preflight checks) into single calls. Only keep separate commands where individual exit-code handling is needed.
+- NEVER spawn `claude -p` or Claude subprocess
+- Run each Bash command as a standalone call — never chain with `&&` or `$()`

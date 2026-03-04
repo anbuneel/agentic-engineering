@@ -54,9 +54,11 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 - Do NOT use `-a` flag with `codex exec` — it's not supported on the exec subcommand (approvals default to never in non-interactive mode)
 - Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
 - Gemini model inherited from `~/.gemini/settings.json` (`general.model`) — never hardcode `-m`
-- Gemini CLI: use `-p "prompt"` for non-interactive mode, `-y` for auto-approve, redirect stdout for output (`> file.md`)
+- Gemini CLI: use `-p "prompt"` for non-interactive mode, `-y` for auto-approve
+- Gemini CLI: capture output from Bash tool result and save with Write tool — do NOT use shell redirects (`>`) as they trigger approval prompts
 - Gemini CLI: `--approval-mode plan` requires experimental flag — use `-y` with explicit "do NOT modify files" in prompt instead
 - Use Read/Write tools for file operations — never `cp`, `mv`, or shell redirects
+- Codex CLI: use `--json` flag for structured JSONL output when session ID capture is needed — parse `thread_id` from the first line (`{"type":"thread.started","thread_id":"<UUID>"}`)
 - Generate session IDs natively — no Bash calls for setup
 - All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
 
