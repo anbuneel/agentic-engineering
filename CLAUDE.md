@@ -44,6 +44,10 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 - **Decision gate**: User breaks ties on reject AND defer — nothing silently ignored
 - **Convergence loop**: Min 2 rounds (review + re-review), max 5. Exits when all MUST FIX resolved, fixes verified, and all GH bot findings confirmed resolved via cross-round fingerprint tracking
 
+## Documentation Rules
+
+- When modifying skill files (`skills/*.md`), always check and update `docs/SKILLS_GUIDE.md` and `README.md` if the change affects documented behavior, flow diagrams, or step naming
+
 ## Skill Design Rules
 
 - Codex model inherited from `~/.codex/config.toml` — never hardcode `-m`

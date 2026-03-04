@@ -173,14 +173,14 @@ Loop for up to 5 rounds.
 
 **Task 1: Codex Review** — run as a background Bash command (`run_in_background: true`).
 
-**CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If it is missing or null, this is Round 1 — use fresh exec. **Using fresh `codex exec` on round 2+ is a bug.**
+**CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If both are null, use fresh exec (Round 1, or session ID was not captured).
 
 **Round 1** (no `nextCodexCommand` in state):
 ```bash
 codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "Review all changes on this branch compared to ${BASE_BRANCH}. Focus on bugs, security issues, code quality, and edge cases. Number each finding with severity (MUST FIX / SHOULD FIX / CONSIDER). End with VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
-Capture `CODEX_SESSION_ID` from output. Build the next round's resume command and save BOTH to state file:
+Search the Bash tool output for a session ID (look for patterns like `session:`, `Session ID:`, a UUID, or a hex string identifier in the codex output). If found, save it and build the resume command:
 ```json
 {
   "codexSessionId": "<captured ID>",
@@ -188,13 +188,20 @@ Capture `CODEX_SESSION_ID` from output. Build the next round's resume command an
 }
 ```
 
-**Round 2+** (`nextCodexCommand` exists in state):
+**If no session ID found**, log a warning to the user: "Could not capture Codex session ID from output — Round 2+ will use fresh exec with context." Save `codexSessionId: null` and `nextCodexCommand: null` to state.
 
-Read `nextCodexCommand` from state file. Replace `[PLACEHOLDER_FOR_CHANGE_SUMMARY]` with a summary of fixes made this round. Run the resulting command. Resume output goes to stdout — capture from Bash tool result.
+**Round 2+:**
 
-After running, update `nextCodexCommand` in state file with the same session ID for the next potential round.
+Read `codexSessionId` and `nextCodexCommand` from state file.
 
-**If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
+- **If `nextCodexCommand` exists** → use it verbatim. Replace `[PLACEHOLDER_FOR_CHANGE_SUMMARY]` with a summary of fixes made this round. Resume output goes to stdout — capture from Bash tool result. Update `nextCodexCommand` in state for the next potential round.
+- **If `nextCodexCommand` is null** (session ID was not captured) → use fresh exec with prior-round context:
+  ```bash
+  codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md" "This is Round N of a multi-round review. Previous round found these issues: [SUMMARY_OF_PRIOR_FINDINGS]. Fixes applied: [SUMMARY_OF_FIXES]. Re-review all changes on this branch compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
+  ```
+  Again attempt to capture session ID from output for subsequent rounds.
+
+**If resume fails**, fall back to fresh exec with prior-round context (same as null case above). Update state to clear `nextCodexCommand` and attempt to capture new session ID.
 
 **Task 2: GH Bot Polling** — run in parallel with Task 1 (launch in the same message).
 
