@@ -167,35 +167,11 @@ Loop for up to 5 rounds.
 
 **CRITICAL — At the start of EVERY round, read the state file NOW and restore all variables from it** (`REVIEW_ID`, `REVIEW_DIR`, `BRANCH`, `BASE_BRANCH`, `CODEX_SESSION_ID`, `nextCodexCommand`, `PR_NUMBER`, `round`, `seenCommentIds`). After context compaction these values exist ONLY in the state file. Set `rebasedThisRound: false`.
 
-### Step 2a: Parallel Review (GH Bots + Codex)
+### Step 2a: Parallel Review (Codex + GH Bots)
 
-Launch GH bot polling and Codex review **concurrently**. They have no dependency on each other.
+**CRITICAL — Launch BOTH tasks below simultaneously in a SINGLE message using parallel tool calls. Do NOT run them sequentially. Do NOT wait for one to finish before starting the other. They have zero dependency on each other.**
 
-#### Track A: GH Bot Polling
-
-Resolve owner/repo once:
-
-```bash
-gh repo view --json nameWithOwner
-```
-
-Parse JSON natively. Poll these 3 endpoints every ~30 seconds as separate standalone commands:
-
-```bash
-gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments
-```
-```bash
-gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
-```
-```bash
-gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
-```
-
-Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout. **Adaptive timeout:** Round 1 = 8 minutes (bots may need to initialize); Round 2+ = 4 minutes (bots already warmed up). Save to state file.
-
-#### Track B: Codex Review
-
-Run concurrently with Track A (use `run_in_background` for the Bash tool).
+**Task 1: Codex Review** — run as a background Bash command (`run_in_background: true`).
 
 **CRITICAL — Read the state file BEFORE choosing which command to run.** Check `nextCodexCommand` and `codexSessionId`. If `nextCodexCommand` exists in state, use it verbatim (it is a resume command). If it is missing or null, this is Round 1 — use fresh exec. **Using fresh `codex exec` on round 2+ is a bug.**
 
@@ -220,9 +196,31 @@ After running, update `nextCodexCommand` in state file with the same session ID 
 
 **If resume fails**, fall back to fresh `codex exec -s read-only -C "${PROJECT_ROOT}" -o "${REVIEW_DIR}/codex-review-${REVIEW_ID}.md"` with prior round context. Update state to clear `nextCodexCommand` and capture new session ID.
 
+**Task 2: GH Bot Polling** — run in parallel with Task 1 (launch in the same message).
+
+Resolve owner/repo once:
+
+```bash
+gh repo view --json nameWithOwner
+```
+
+Parse JSON natively. Poll these 3 endpoints every ~30 seconds as separate standalone commands:
+
+```bash
+gh api repos/{owner}/{repo}/issues/{PR_NUMBER}/comments
+```
+```bash
+gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
+```
+```bash
+gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
+```
+
+Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout. **Adaptive timeout:** Round 1 = 8 minutes (bots may need to initialize); Round 2+ = 4 minutes (bots already warmed up). Save to state file.
+
 #### Sync Point
 
-Wait for **both** Track A and Track B to complete before proceeding. Collect GH bot comments and Codex output.
+Wait for **both** Task 1 and Task 2 to complete before proceeding. Collect Codex output and GH bot comments.
 
 ### Step 2b: Consolidate
 
