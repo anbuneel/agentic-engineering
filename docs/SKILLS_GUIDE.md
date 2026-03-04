@@ -33,8 +33,8 @@ graph TD
     G --> H[Round N]
 
     subgraph "Review Loop (2-5 rounds)"
-        H --> I["Track A: Poll GH Bots\n(8 min R1 / 4 min R2+)"]
-        H --> J[Track B: Codex CLI Review]
+        H --> I[Task 1: Codex CLI Review]
+        H --> J["Task 2: Poll GH Bots\n(8 min R1 / 4 min R2+)"]
         I & J --> K[Sync Point]
         K --> L["Consolidate + GH Bot Verification\n(fingerprint cross-check)"]
         L --> M[Counter-Review + Decision Gate]
