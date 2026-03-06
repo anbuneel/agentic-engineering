@@ -74,7 +74,7 @@ Edit in either location, changes sync instantly. If a hard link breaks (tool del
 
 - Codex model inherited from `~/.codex/config.toml` — never hardcode `-m`
 - Do NOT use `-a` flag with `codex exec` — it's not supported on the exec subcommand (approvals default to never in non-interactive mode)
-- Do NOT use `-s` flag with `codex exec resume` — sandbox mode is inherited from the original session and the resume subcommand rejects it
+- Do NOT use `-s` or `-C` flags with `codex exec resume` — resume only accepts `[SESSION_ID]` and `[PROMPT]` (plus `--json`); sandbox and working directory are inherited from the original session
 - Use codex `-C <dir>` instead of `cd` to avoid compound command approval prompts
 - Gemini model inherited from `~/.gemini/settings.json` (`general.model`) — never hardcode `-m`
 - Gemini CLI: use `-p "prompt"` for non-interactive mode, `-y` for auto-approve

@@ -202,7 +202,7 @@ Extract the review content from `item.completed` events in the JSONL output (the
 
 **Round 2+** (`codexThreadId` exists in state):
 ```bash
-codex exec resume "${CODEX_THREAD_ID}" --json -C "${PROJECT_ROOT}" "Code has been updated. [CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_THREAD_ID}" --json "Code has been updated. [CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Replace `[CHANGE_SUMMARY]` with a summary of fixes made this round. Extract review content from `item.completed` events as in Round 1. The `thread_id` stays the same across resumes — no need to re-capture.
@@ -229,9 +229,11 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
 gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/comments
 ```
 
+Parse each endpoint's JSON response natively — do NOT use `grep -c`, `wc -l`, or bash arithmetic to count comments. Extract the array of objects, compare each `id` against `seenCommentIds`, and collect any new ones.
+
 Track seen IDs with namespace prefixes (`issues:{id}`, `reviews:{id}`, `pull_comments:{id}`). Repeat until new comments arrive or timeout. **Adaptive timeout:** Round 1 = 8 minutes (bots may need to initialize); Round 2+ = 4 minutes (bots already warmed up). Save to state file.
 
-**No-bots short-circuit:** If Round 1 polling times out with zero new comments from any bot, set `ghBotsActive: false` in state. In Round 2+, if `ghBotsActive` is false, skip Task 2 entirely — no bots are configured and polling would just waste time. If a bot does appear in a later round (e.g., user installs one mid-review), the Codex sync point still works normally.
+If polling times out with no new comments, that's fine — proceed with Codex output only. Always poll in every round regardless of previous results, since bots may respond at different speeds across rounds.
 
 #### Sync Point
 
