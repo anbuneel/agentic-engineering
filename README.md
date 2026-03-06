@@ -202,6 +202,30 @@ Get-ChildItem agentic-engineering\skills\*.md | ForEach-Object { New-Item -ItemT
 Get-ChildItem agentic-engineering\agents\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "~\.claude\agents\$($_.Name)" -Target $_.FullName }
 ```
 
+### Detect Sync Drift
+
+Hard links can break when tools recreate files instead of editing in place. Add a `SessionStart` hook to `~/.claude/settings.json` to get warned at the start of every Claude Code session:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"<path-to-repo>/scripts/check-skill-sync.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The script silently exits if the repo directory doesn't exist, so it's safe to add globally.
+
 ### Install Individual Files
 
 ```bash

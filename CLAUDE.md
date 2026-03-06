@@ -18,6 +18,8 @@ skills/          ← User-invoked workflows (/command-name)
 agents/          ← Sub-agents (invoked via Task tool)
   codebase-snapshot.md
   code-cleanup-analyst.md
+scripts/         ← Dev tooling
+  check-skill-sync.sh
 ```
 
 ## Hard Links (Development Setup)
@@ -37,6 +39,26 @@ Get-ChildItem agents\*.md | ForEach-Object { New-Item -ItemType HardLink -Path "
 ```
 
 Edit in either location, changes sync instantly. If a hard link breaks (tool deleted and recreated the file instead of editing in place), re-run the commands above.
+
+**Sync check:** Add a `SessionStart` hook to `~/.claude/settings.json` to detect drift at the start of every Claude Code session:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"<path-to-repo>/scripts/check-skill-sync.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Key Patterns
 
