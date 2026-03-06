@@ -98,7 +98,7 @@ If no reject/defer items, skip this step.
 4. Resume the Codex session using the `codexThreadId` from the state file:
 
 ```bash
-codex exec resume "${CODEX_THREAD_ID}" --json -s read-only -C "${PROJECT_ROOT}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_THREAD_ID}" --json -C "${PROJECT_ROOT}" "I've revised the plan. Updated plan: ${REVIEW_DIR}/claude-plan-${REVIEW_ID}.md. [Changes made. Findings not addressed with rationale.] Re-review. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Extract review content from `item.completed` events as in Round 1.

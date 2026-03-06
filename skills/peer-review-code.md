@@ -202,7 +202,7 @@ Extract the review content from `item.completed` events in the JSONL output (the
 
 **Round 2+** (`codexThreadId` exists in state):
 ```bash
-codex exec resume "${CODEX_THREAD_ID}" --json -s read-only -C "${PROJECT_ROOT}" "Code has been updated. [CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
+codex exec resume "${CODEX_THREAD_ID}" --json -C "${PROJECT_ROOT}" "Code has been updated. [CHANGE_SUMMARY]. Re-review all changes compared to ${BASE_BRANCH}. Focus on whether previous findings are resolved and any new issues. VERDICT: APPROVED or VERDICT: REVISE"
 ```
 
 Replace `[CHANGE_SUMMARY]` with a summary of fixes made this round. Extract review content from `item.completed` events as in Round 1. The `thread_id` stays the same across resumes — no need to re-capture.

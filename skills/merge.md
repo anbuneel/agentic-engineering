@@ -77,7 +77,7 @@ gh pr view --json number,title,state,mergeable,baseRefName
 
 Parse JSON natively. Store `baseRefName` as `TARGET_BRANCH` — this is the branch the PR merges into (may differ from the repo default branch in release/hotfix flows).
 
-Present the PR number, title, and target branch to the user. **Wait for explicit confirmation before proceeding** — merging is irreversible. Do NOT continue to Step 2 until the user confirms.
+Present the PR number, title, and target branch to the user, then proceed to Step 2.
 
 ---
 
