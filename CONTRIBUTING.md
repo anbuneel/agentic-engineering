@@ -31,7 +31,7 @@ Skills live in `skills/` and are user-invoked workflows. Follow these convention
 - **Generate session IDs natively** — no Bash calls for setup
 - **Never hardcode AI model names** — inherit from user config
 
-Look at `skills/peer-review-code.md` as the reference example for a complex skill, or `skills/security-posture.md` for a simpler one.
+Look at `skills/multi-agent-code-review.md` as the reference example for a complex skill, or `skills/security-posture.md` for a simpler one.
 
 ## Writing an Agent
 

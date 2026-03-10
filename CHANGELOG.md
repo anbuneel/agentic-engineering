@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-03-10
+
+### Changed
+- Renamed `peer-review-code` → `multi-agent-code-review` for clarity with external users
+- Renamed `peer-review-plan` → `multi-agent-plan-review`
+- Renamed `peer-ideate` → `multi-agent-ideate`
+- Updated all references across README, CLAUDE.md, SKILLS_GUIDE, CONTRIBUTING, templates, and examples
+
 ## [0.6.6] - 2025-02-27
 
 ### Added

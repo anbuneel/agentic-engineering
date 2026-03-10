@@ -6,13 +6,13 @@ Visual flow diagrams for every skill in the Agentic Engineering toolkit. For det
 
 | Category | Skills | Pattern |
 |----------|--------|---------|
-| Collaboration | `/peer-review-code`, `/peer-review-plan`, `/peer-ideate` | Counter-review + convergence |
+| Collaboration | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` | Counter-review + convergence |
 | Workflow | `/merge` | Linear pipeline |
 | Security | `/security-scan`, `/security-audit`, `/security-posture` | Analysis + reporting |
 
 ---
 
-## `/peer-review-code` — Multi-Agent Code Review
+## `/multi-agent-code-review` — Multi-Agent Code Review
 
 Multi-round review across Codex CLI and GitHub bots with counter-review, decision gates, and convergence tracking. Min 2 rounds, max 5.
 
@@ -58,7 +58,7 @@ graph TD
 
 ---
 
-## `/peer-review-plan` — Two-Agent Plan Review
+## `/multi-agent-plan-review` — Two-Agent Plan Review
 
 Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews, Claude counter-reviews with dispositions, user resolves disputes, Claude revises. Min 2 rounds, max 5.
 
@@ -87,7 +87,7 @@ graph TD
 
 ---
 
-## `/peer-ideate` — Multi-Model Brainstorming Council
+## `/multi-agent-ideate` — Multi-Model Brainstorming Council
 
 Three models brainstorm independently on any topic, then Claude synthesizes and each model counter-reviews. Works with any subset of models.
 
@@ -268,7 +268,7 @@ graph LR
 
 | Pattern | Used By | Purpose |
 |---------|---------|---------|
-| Counter-review | `/peer-review-code`, `/peer-review-plan`, `/security-audit` | Claude critically evaluates findings instead of blindly accepting |
-| Decision gate | `/peer-review-code`, `/peer-review-plan`, `/security-audit` | Human-in-the-loop only on disagreements |
-| Convergence loop | `/peer-review-code`, `/peer-review-plan` | Can't exit until fixes are verified clean |
-| State persistence | `/peer-review-code`, `/peer-review-plan`, `/security-audit` | JSON state file survives context window compaction |
+| Counter-review | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Claude critically evaluates findings instead of blindly accepting |
+| Decision gate | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Human-in-the-loop only on disagreements |
+| Convergence loop | `/multi-agent-code-review`, `/multi-agent-plan-review` | Can't exit until fixes are verified clean |
+| State persistence | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | JSON state file survives context window compaction |

@@ -8,9 +8,9 @@ Agentic Engineering — a collection of workflow skills and sub-agents for AI co
 
 ```
 skills/          ← User-invoked workflows (/command-name)
-  peer-review-code.md
-  peer-review-plan.md
-  peer-ideate.md
+  multi-agent-code-review.md
+  multi-agent-plan-review.md
+  multi-agent-ideate.md
   merge.md
   security-scan.md
   security-audit.md

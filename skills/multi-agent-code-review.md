@@ -1,21 +1,21 @@
 ---
-name: peer-review-code
+name: multi-agent-code-review
 description: >
   Orchestrate multi-agent code review with Codex CLI and GitHub bots,
   with Claude performing counter-review on every finding. Use when the
-  user wants code reviewed by multiple AI agents, asks for peer review,
-  multi-model code review, or automated review on a feature branch.
-  Also use for "review my PR", "get feedback on my code from other
-  models", or "run code review with multiple agents".
+  user wants code reviewed by multiple AI agents, asks for multi-agent
+  code review, multi-model code review, or automated review on a feature
+  branch. Also use for "review my PR", "get feedback on my code from
+  other models", or "run code review with multiple agents".
 ---
 
-# Peer Review Code (Multi-Agent with Counter-Review)
+# Multi-Agent Code Review (with Counter-Review)
 
 Orchestrate an automated code review across multiple AI agents (Codex CLI, GitHub-connected bots) with Claude as the central coordinator. Claude performs a **counter-review** on every finding — assigning dispositions (agree/partial/defer/reject) before fixing. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
 
 ## When to Invoke
 
-- When the user runs `/peer-review-code` on a feature branch
+- When the user runs `/multi-agent-code-review` on a feature branch
 - When the user wants multi-agent code review with automated fixes
 
 ## Prerequisites

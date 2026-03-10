@@ -1,20 +1,20 @@
 ---
-name: peer-review-plan
+name: multi-agent-plan-review
 description: >
-  Send an implementation plan to Codex CLI for peer review, with Claude
-  performing counter-review on each finding. Use when the user wants a
-  second opinion on a plan, asks to review a plan with another model,
-  or says "have Codex review this plan", "get feedback on my plan", or
-  "peer review the plan". Best used during or after plan mode.
+  Send an implementation plan to Codex CLI for multi-agent review, with
+  Claude performing counter-review on each finding. Use when the user
+  wants a second opinion on a plan, asks to review a plan with another
+  model, or says "have Codex review this plan", "get feedback on my
+  plan", or "multi-agent plan review". Best used during or after plan mode.
 ---
 
-# Peer Review Plan (Iterative with Counter-Review)
+# Multi-Agent Plan Review (Iterative with Counter-Review)
 
-Send the current implementation plan to OpenAI Codex CLI for peer review. Claude performs a **counter-review** on each round of Codex feedback — assigning dispositions (agree/partial/defer/reject) to every finding before revising. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
+Send the current implementation plan to OpenAI Codex CLI for multi-agent review. Claude performs a **counter-review** on each round of Codex feedback — assigning dispositions (agree/partial/defer/reject) to every finding before revising. When Claude rejects a finding, the **user breaks the tie**. Min 2 rounds, max 5.
 
 ## When to Invoke
 
-- When the user runs `/peer-review-plan` during or after plan mode
+- When the user runs `/multi-agent-plan-review` during or after plan mode
 - When the user wants a second opinion on a plan from a different model
 
 ## Agent Instructions

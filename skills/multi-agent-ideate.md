@@ -1,5 +1,5 @@
 ---
-name: peer-ideate
+name: multi-agent-ideate
 description: >
   Gather independent perspectives from Claude, Codex, and Gemini on any
   topic — architecture, naming, API design, UI, tradeoffs. All three
@@ -10,13 +10,13 @@ description: >
   decision.
 ---
 
-# Peer Ideate (Multi-Model Council)
+# Multi-Agent Ideate (Multi-Model Council)
 
 Gather independent perspectives from Claude, Codex, and Gemini on any topic — UI design, architecture, naming, API design, tradeoffs, or any question where diverse viewpoints add value. All three models brainstorm in parallel, then Claude synthesizes and each model counter-reviews the synthesis.
 
 ## When to Invoke
 
-- When the user runs `/peer-ideate`
+- When the user runs `/multi-agent-ideate`
 - When the user wants multi-model brainstorming or a "second opinion" from multiple models
 
 ## Prerequisites
@@ -69,7 +69,7 @@ Initialize state file `${IDEATION_DIR}/ideation-state-${SESSION_ID}.json` tracki
 
 ### Step 1: Capture Brief
 
-If the user provided a topic/question with the `/peer-ideate` command, use it. Otherwise, ask:
+If the user provided a topic/question with the `/multi-agent-ideate` command, use it. Otherwise, ask:
 
 > What would you like the model council to brainstorm on?
 >

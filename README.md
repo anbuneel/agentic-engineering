@@ -1,6 +1,6 @@
 # Agentic Engineering
 
-Slash commands for [Claude Code](https://claude.ai/code) that add multi-agent code review, security scanning, and automated documentation workflows. Type `/peer-review-code` and your PR gets reviewed by multiple AI agents, counter-reviewed, and fixed — automatically.
+Slash commands for [Claude Code](https://claude.ai/code) that add multi-agent code review, security scanning, and automated documentation workflows. Type `/multi-agent-code-review` and your PR gets reviewed by multiple AI agents, counter-reviewed, and fixed — automatically.
 
 **View the [Visual Skills Guide](docs/SKILLS_GUIDE.md) for flow diagrams of every workflow.**
 
@@ -18,9 +18,9 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 
 | Skill | Needs Codex? | Needs Gemini? |
 |-------|-------------|---------------|
-| `/peer-review-code` | Yes | No |
-| `/peer-review-plan` | Yes | No |
-| `/peer-ideate` | Optional | Optional |
+| `/multi-agent-code-review` | Yes | No |
+| `/multi-agent-plan-review` | Yes | No |
+| `/multi-agent-ideate` | Optional | Optional |
 | `/security-posture` | No | No |
 | `/security-scan` | No | No |
 | `/security-audit` | No (optional) | No |
@@ -44,9 +44,9 @@ You use Claude Code and want structured, repeatable workflows — not ad-hoc pro
 
 The core contribution — multi-agent review with counter-review, decision gates, and convergence loops. These aren't wrappers around a single AI reviewer. They orchestrate multiple agents, critically evaluate their feedback, and keep the human in the loop.
 
-### `/peer-review-code` — Multi-Agent Code Review
+### `/multi-agent-code-review` — Multi-Agent Code Review
 
-[`skills/peer-review-code.md`](skills/peer-review-code.md) | Requires: git, gh, Codex CLI
+[`skills/multi-agent-code-review.md`](skills/multi-agent-code-review.md) | Requires: git, gh, Codex CLI
 
 Claude reviews your PR, sends it to Codex CLI and GitHub bots for independent second opinions, then **counter-reviews every finding** — agreeing, scoping down, deferring, or rejecting with justification. You break ties on rejections. Runs 2-5 rounds until all issues are resolved, with a mandatory verification round after fixes.
 
@@ -77,17 +77,17 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 
 **What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — Claude critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored.
 
-### `/peer-review-plan` — Two-Agent Plan Review
+### `/multi-agent-plan-review` — Two-Agent Plan Review
 
-[`skills/peer-review-plan.md`](skills/peer-review-plan.md) | Requires: Codex CLI
+[`skills/multi-agent-plan-review.md`](skills/multi-agent-plan-review.md) | Requires: Codex CLI
 
 Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews → Claude counter-reviews with dispositions → you resolve disputes → Claude revises → repeat. Min 2 rounds, max 5. Same counter-review and decision gate patterns as code review.
 
 **What makes it different:** Gets a second model's perspective on your architecture before you write any code. Catches blind spots that a single model misses.
 
-### `/peer-ideate` — Multi-Model Brainstorming Council
+### `/multi-agent-ideate` — Multi-Model Brainstorming Council
 
-[`skills/peer-ideate.md`](skills/peer-ideate.md) | Optional: Codex CLI, Gemini CLI
+[`skills/multi-agent-ideate.md`](skills/multi-agent-ideate.md) | Optional: Codex CLI, Gemini CLI
 
 Claude, Codex, and Gemini independently brainstorm on any topic — UI design, architecture, naming, API design, tradeoffs, or any open-ended question. Claude synthesizes the raw responses into a unified findings list, then each model counter-reviews the synthesis. Final report shows consensus ideas, contested points, and unique insights ranked by confidence.
 
@@ -230,9 +230,9 @@ The script silently exits if the repo directory doesn't exist, so it's safe to a
 
 ```bash
 # Skills
-curl -o ~/.claude/commands/peer-review-code.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-review-code.md
-curl -o ~/.claude/commands/peer-review-plan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-review-plan.md
-curl -o ~/.claude/commands/peer-ideate.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/peer-ideate.md
+curl -o ~/.claude/commands/multi-agent-code-review.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-code-review.md
+curl -o ~/.claude/commands/multi-agent-plan-review.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-plan-review.md
+curl -o ~/.claude/commands/multi-agent-ideate.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-ideate.md
 curl -o ~/.claude/commands/merge.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/merge.md
 curl -o ~/.claude/commands/security-scan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-scan.md
 curl -o ~/.claude/commands/security-audit.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-audit.md
@@ -259,9 +259,9 @@ These are markdown files — any AI agent that can read instructions and execute
 
 | Tool | Install | Used by |
 |------|---------|---------|
-| [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/peer-review-code`, `/merge`, `/security-posture` (optional) |
-| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | `/peer-review-code`, `/peer-review-plan`, `/peer-ideate` (optional), `/security-audit` (optional) |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` | `/peer-ideate` (optional) |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/multi-agent-code-review`, `/merge`, `/security-posture` (optional) |
+| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` (optional), `/security-audit` (optional) |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` | `/multi-agent-ideate` (optional) |
 | [Semgrep](https://semgrep.dev/) | `pip install semgrep` | `/security-scan` (optional) |
 | [Gitleaks](https://github.com/gitleaks/gitleaks) | `brew install gitleaks` | `/security-scan` (optional) |
 
@@ -272,7 +272,7 @@ model = "your-preferred-model"
 model_reasoning_effort = "high"
 ```
 
-**GitHub App Reviewers (optional):** `/peer-review-code` can collect reviews from GitHub-based AI bots in addition to the local Codex CLI review. These are entirely optional — the skill works without them, but each one adds an independent perspective.
+**GitHub App Reviewers (optional):** `/multi-agent-code-review` can collect reviews from GitHub-based AI bots in addition to the local Codex CLI review. These are entirely optional — the skill works without them, but each one adds an independent perspective.
 
 | Bot | Install | Setup | What it does |
 |-----|---------|-------|--------------|
@@ -310,9 +310,9 @@ Claude Code prompts for approval on every Bash command by default. These skills 
 | Permission | Used by | Why |
 |---|---|---|
 | `Bash(git *)` | All skills | Branch operations, commits, push, diff |
-| `Bash(gh *)` | `/peer-review-code`, `/merge`, `/security-posture` | PR creation, bot review polling, issue creation |
-| `Bash(codex *)` | `/peer-review-code`, `/peer-review-plan`, `/peer-ideate`, `/security-audit` | Codex CLI exec and resume commands |
-| `Bash(gemini *)` | `/peer-ideate` | Gemini CLI non-interactive prompts |
+| `Bash(gh *)` | `/multi-agent-code-review`, `/merge`, `/security-posture` | PR creation, bot review polling, issue creation |
+| `Bash(codex *)` | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate`, `/security-audit` | Codex CLI exec and resume commands |
+| `Bash(gemini *)` | `/multi-agent-ideate` | Gemini CLI non-interactive prompts |
 | `Bash(npm audit *)` | `/security-scan` | Dependency vulnerability scanning |
 | `Bash(semgrep *)` | `/security-scan` | Static analysis |
 | `Bash(gitleaks *)` | `/security-scan` | Secret detection |

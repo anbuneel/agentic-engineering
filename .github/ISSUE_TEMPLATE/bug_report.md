@@ -6,7 +6,7 @@ labels: bug
 ---
 
 **Which skill or agent?**
-e.g., `/peer-review-code`, `codebase-snapshot` agent
+e.g., `/multi-agent-code-review`, `codebase-snapshot` agent
 
 **What happened?**
 Describe the unexpected behavior.
