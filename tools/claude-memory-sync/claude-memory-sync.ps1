@@ -295,14 +295,14 @@ function Invoke-Push {
         $localMemory = Join-Path (Join-Path $script:ProjectsDir $mangled) "memory"
         $repoMemory = Join-Path (Join-Path (Join-Path $syncRepo "projects") $canonical) "memory"
 
-        # Check for .md files (excluding MEMORY.md)
+        # Collect local .md files (excluding MEMORY.md)
         $mdFiles = Get-ChildItem $localMemory -Filter "*.md" -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne "MEMORY.md" }
-        if ($mdFiles.Count -eq 0) { continue }
 
         Write-Info "Syncing $mangled → $canonical"
         if (-not (Test-Path $repoMemory)) { New-Item -ItemType Directory -Path $repoMemory -Force | Out-Null }
 
+        # Copy local files to sync repo
         foreach ($f in $mdFiles) {
             Copy-Item $f.FullName -Destination $repoMemory -Force
         }
@@ -310,7 +310,8 @@ function Invoke-Push {
         # Delete files from sync repo that no longer exist locally
         $repoFiles = Get-ChildItem $repoMemory -Filter "*.md" -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne "MEMORY.md" }
-        $localNames = $mdFiles | ForEach-Object { $_.Name }
+        $localNames = @()
+        if ($mdFiles) { $localNames = $mdFiles | ForEach-Object { $_.Name } }
         foreach ($rf in $repoFiles) {
             if ($localNames -notcontains $rf.Name) {
                 Remove-Item $rf.FullName -Force
@@ -338,11 +339,11 @@ function Invoke-Push {
     } else {
         Invoke-Git -C $syncRepo commit -m "sync from $machineId -- $ts"
         Write-Info "Pushing..."
-        try {
-            Invoke-Git -C $syncRepo push
-            Write-Info "Pushed $count project(s)."
-        } catch {
+        Invoke-Git -C $syncRepo push
+        if ($LASTEXITCODE -ne 0) {
             Write-Warn "Push failed -- changes committed locally"
+        } else {
+            Write-Info "Pushed $count project(s)."
         }
     }
 }
@@ -377,10 +378,23 @@ function Invoke-Pull {
 
         Write-Info "Pulling $canonical → $mangled"
 
-        $mdFiles = Get-ChildItem $repoMemory -Filter "*.md" -File |
+        # Copy files from sync repo to local
+        $repoFiles = Get-ChildItem $repoMemory -Filter "*.md" -File |
             Where-Object { $_.Name -ne "MEMORY.md" }
-        foreach ($f in $mdFiles) {
+        foreach ($f in $repoFiles) {
             Copy-Item $f.FullName -Destination $localMemory -Force
+        }
+
+        # Delete local files that were removed upstream
+        $localFiles = Get-ChildItem $localMemory -Filter "*.md" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne "MEMORY.md" }
+        $repoNames = @()
+        if ($repoFiles) { $repoNames = $repoFiles | ForEach-Object { $_.Name } }
+        foreach ($lf in $localFiles) {
+            if ($repoNames -notcontains $lf.Name) {
+                Remove-Item $lf.FullName -Force
+                Write-Info "  Deleted (removed upstream): $($lf.Name)"
+            }
         }
 
         Update-MemoryIndex $localMemory

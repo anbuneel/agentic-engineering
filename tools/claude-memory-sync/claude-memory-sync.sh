@@ -420,20 +420,10 @@ cmd_push() {
     local local_memory="$PROJECTS_DIR/$mangled/memory"
     local repo_memory="$sync_repo/projects/$canonical/memory"
 
-    # Check if there are any .md files (besides MEMORY.md)
-    local has_files=false
-    for f in "$local_memory"/*.md; do
-      [[ -f "$f" ]] || continue
-      [[ "$(basename "$f")" == "MEMORY.md" ]] && continue
-      has_files=true
-      break
-    done
-    $has_files || continue
-
     info "Syncing $mangled → $canonical"
     mkdir -p "$repo_memory"
 
-    # Copy memory files (skip MEMORY.md — regenerated)
+    # Copy local memory files to sync repo (skip MEMORY.md — regenerated)
     for f in "$local_memory"/*.md; do
       [[ -f "$f" ]] || continue
       [[ "$(basename "$f")" == "MEMORY.md" ]] && continue
@@ -471,8 +461,11 @@ cmd_push() {
   else
     git -C "$sync_repo" commit -m "sync from $machine_id — $ts" 2>&1
     info "Pushing..."
-    git -C "$sync_repo" push 2>&1 || warn "Push failed — changes committed locally"
-    info "Pushed $count project(s)."
+    if git -C "$sync_repo" push 2>&1; then
+      info "Pushed $count project(s)."
+    else
+      warn "Push failed — changes committed locally"
+    fi
   fi
 }
 
@@ -514,11 +507,23 @@ cmd_pull() {
 
     info "Pulling $canonical → $mangled"
 
-    # Copy memory files (skip MEMORY.md — regenerated)
+    # Copy files from sync repo to local (skip MEMORY.md — regenerated)
     for f in "$repo_memory"/*.md; do
       [[ -f "$f" ]] || continue
       [[ "$(basename "$f")" == "MEMORY.md" ]] && continue
       cp "$f" "$local_memory/"
+    done
+
+    # Delete local files that were removed upstream
+    for lf in "$local_memory"/*.md; do
+      [[ -f "$lf" ]] || continue
+      [[ "$(basename "$lf")" == "MEMORY.md" ]] && continue
+      local lf_name
+      lf_name=$(basename "$lf")
+      if [[ ! -f "$repo_memory/$lf_name" ]]; then
+        rm "$lf"
+        info "  Deleted (removed upstream): $lf_name"
+      fi
     done
 
     # Regenerate local index
