@@ -1,0 +1,8 @@
+{
+  "sync_repo": "~/.claude-memory-sync",
+  "machine_id": "my-machine-linux",
+  "aliases": {
+    "D--anbs-dev-my-project": "owner-my-project",
+    "home-user-my-project": "owner-my-project"
+  }
+}
