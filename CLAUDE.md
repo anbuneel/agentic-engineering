@@ -18,6 +18,8 @@ skills/          ← User-invoked workflows (/command-name)
 agents/          ← Sub-agents (invoked via Task tool)
   codebase-snapshot.md
   code-cleanup-analyst.md
+tools/           ← Standalone CLI tools
+  claude-memory-sync/   ← Cross-machine memory sync via git
 scripts/         ← Dev tooling
   check-skill-sync.sh
 ```

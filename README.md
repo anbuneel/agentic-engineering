@@ -154,6 +154,26 @@ Squash-merges the current PR, switches to the target branch, then auto-updates R
 
 ---
 
+## Tools
+
+### `claude-memory-sync` — Cross-Machine Memory Sync
+
+[`tools/claude-memory-sync/`](tools/claude-memory-sync/) | Requires: git + (jq or python3)
+
+Syncs Claude Code's auto-generated project memories across machines via a private git repo. Handles the core problem: the same project gets different path-mangled names on each machine (`D--anbs-dev-project` on Windows vs `home-user-project` on Linux). The tool maps them to a canonical name derived from the git remote URL.
+
+**Commands:** `setup`, `push`, `pull`, `sync`, `status`, `list`, `alias`
+
+**How it works:**
+
+1. `setup <repo-url>` — clones a private sync repo, creates config
+2. `alias --detect` — run from inside each project to auto-detect canonical name from git remote
+3. `push` / `pull` / `sync` — sync memories between local and the repo
+
+Includes both bash and PowerShell scripts. Bash uses jq if available, falls back to python3. See the [tool README](tools/claude-memory-sync/README.md) for hook integration and full docs.
+
+---
+
 ## Agents
 
 Background sub-agents invoked via the Task tool. These run alongside your work, not as slash commands.
