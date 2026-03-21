@@ -52,6 +52,7 @@ Claude Code stores memories under `~/.claude/projects/*/memory/` using path-mang
 |---------|-------------|
 | `setup <repo-url>` | Clone sync repo and create config |
 | `setup --init` | Initialize a new local sync repo |
+| `sync` | Push then pull (full round-trip) |
 | `push` | Push local memories to sync repo |
 | `pull` | Pull memories from sync repo to local |
 | `status` | Show sync status and last sync info |
@@ -115,7 +116,7 @@ Auto-sync on every Claude Code session by adding a `SessionStart` hook to `~/.cl
         "hooks": [
           {
             "type": "command",
-            "command": "claude-memory-sync push && claude-memory-sync pull",
+            "command": "claude-memory-sync sync",
             "timeout": 30
           }
         ]
@@ -126,6 +127,21 @@ Auto-sync on every Claude Code session by adding a `SessionStart` hook to `~/.cl
 ```
 
 This pushes any stale local changes from the last session, then pulls the latest from other machines. No `SessionEnd` hook needed — the next session start picks up anything unpushed.
+
+## Deletion Propagation
+
+When you delete a memory file locally and `push`, the file is also removed from the sync repo. The next `pull` on another machine will not bring it back.
+
+This only applies to projects you're actively syncing — files from projects you haven't pushed from this machine are left untouched.
+
+## New Machine Setup
+
+On a fresh machine, `pull` creates local project directories using the canonical name even if no alias mapping exists yet. This means you can:
+
+1. Run `setup` + `pull` to get all your memories immediately
+2. Run `alias --detect` from each project directory later to set up proper mappings
+
+You don't need to set up aliases before your first pull.
 
 ## Conflict Handling
 

@@ -44,6 +44,7 @@ Usage: claude-memory-sync.ps1 <command> [options]
 Commands:
   setup <repo-url>                  Clone sync repo and create config
   setup --init                      Initialize a new local sync repo
+  sync                              Push then pull (full round-trip)
   push                              Push local memories to sync repo
   pull                              Pull memories from sync repo to local
   status                            Show sync status
@@ -299,6 +300,17 @@ function Invoke-Push {
             Copy-Item $f.FullName -Destination $repoMemory -Force
         }
 
+        # Delete files from sync repo that no longer exist locally
+        $repoFiles = Get-ChildItem $repoMemory -Filter "*.md" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne "MEMORY.md" }
+        $localNames = $mdFiles | ForEach-Object { $_.Name }
+        foreach ($rf in $repoFiles) {
+            if ($localNames -notcontains $rf.Name) {
+                Remove-Item $rf.FullName -Force
+                Write-Info "  Deleted (removed locally): $($rf.Name)"
+            }
+        }
+
         Update-MemoryIndex $repoMemory
         $count++
     }
@@ -349,8 +361,8 @@ function Invoke-Pull {
 
         $mangled = Find-LocalForCanonical $canonical
         if (-not $mangled) {
-            Write-Info "Skipping $canonical -- no local project mapped (run 'alias' to map it)"
-            continue
+            $mangled = $canonical
+            Write-Info "No local mapping for $canonical -- creating as $canonical (run 'alias' to remap)"
         }
 
         $localMemory = Join-Path $script:ProjectsDir $mangled "memory"
@@ -462,10 +474,16 @@ function Invoke-Alias {
     Write-Info "Alias set: $($Arguments[0]) → $($Arguments[1])"
 }
 
+function Invoke-Sync {
+    Invoke-Push
+    Invoke-Pull
+}
+
 # --- Main ---
 
 switch ($Command) {
     "setup"     { Invoke-Setup }
+    "sync"      { Invoke-Sync }
     "push"      { Invoke-Push }
     "pull"      { Invoke-Pull }
     "status"    { Invoke-Status }

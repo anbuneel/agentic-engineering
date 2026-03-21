@@ -24,6 +24,7 @@ Usage: claude-memory-sync <command> [options]
 Commands:
   setup <repo-url>                  Clone sync repo and create config
   setup --init                      Initialize a new local sync repo
+  sync                              Push then pull (full round-trip)
   push                              Push local memories to sync repo
   pull                              Pull memories from sync repo to local
   status                            Show sync status
@@ -303,6 +304,18 @@ cmd_push() {
       cp "$f" "$repo_memory/"
     done
 
+    # Delete files from sync repo that no longer exist locally
+    for rf in "$repo_memory"/*.md; do
+      [[ -f "$rf" ]] || continue
+      [[ "$(basename "$rf")" == "MEMORY.md" ]] && continue
+      local rf_name
+      rf_name=$(basename "$rf")
+      if [[ ! -f "$local_memory/$rf_name" ]]; then
+        rm "$rf"
+        info "  Deleted (removed locally): $rf_name"
+      fi
+    done
+
     # Regenerate index in sync repo
     regenerate_memory_index "$repo_memory"
 
@@ -361,8 +374,8 @@ cmd_pull() {
     mangled=$(find_local_for_canonical "$canonical")
 
     if [[ -z "$mangled" ]]; then
-      info "Skipping $canonical — no local project mapped (run 'alias' to map it)"
-      continue
+      mangled="$canonical"
+      info "No local mapping for $canonical — creating as $canonical (run 'alias' to remap)"
     fi
 
     local local_memory="$PROJECTS_DIR/$mangled/memory"
@@ -499,6 +512,7 @@ main() {
 
   case "$cmd" in
     setup)     cmd_setup "$@" ;;
+    sync)      cmd_push "$@"; cmd_pull "$@" ;;
     push)      cmd_push "$@" ;;
     pull)      cmd_pull "$@" ;;
     status)    cmd_status "$@" ;;
