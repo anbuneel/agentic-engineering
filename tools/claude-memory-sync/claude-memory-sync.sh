@@ -36,43 +36,192 @@ Options:
   --help     Show this help
   --version  Show version
 
-Prerequisites: git, jq
+Prerequisites: git, jq or python3
 EOF
 }
 
-# --- Config helpers ---
+# --- JSON backend (jq with python3 fallback) ---
 
-require_jq() {
-  command -v jq &>/dev/null || die "jq required — install: brew install jq / apt install jq / choco install jq"
+_JSON_CMD=""
+
+_init_json() {
+  [[ -n "$_JSON_CMD" ]] && return
+  if command -v jq &>/dev/null; then
+    _JSON_CMD="jq"
+  elif python3 -c "import json" 2>/dev/null; then
+    _JSON_CMD="python3"
+  elif python -c "import json, sys; assert sys.version_info[0]>=3" 2>/dev/null; then
+    _JSON_CMD="python"
+  else
+    die "Either jq or python3 is required"
+  fi
 }
+
+# Read a top-level string field from a JSON file
+json_read() {
+  local file="$1" field="$2"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    jq -r ".$field // empty" "$file"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+v = d.get(sys.argv[2], '')
+print(v if v else '')
+" "$file" "$field"
+  fi
+}
+
+# Read an alias value for a mangled name
+json_get_alias() {
+  local file="$1" mangled="$2"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    jq -r --arg m "$mangled" '.aliases[$m] // empty' "$file"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+print(d.get('aliases', {}).get(sys.argv[2], ''))
+" "$file" "$mangled"
+  fi
+}
+
+# Find the alias key (mangled name) for a canonical value
+json_find_alias_key() {
+  local file="$1" canonical="$2"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    jq -r --arg c "$canonical" \
+      '.aliases | to_entries[] | select(.value == $c) | .key' \
+      "$file" 2>/dev/null | head -1
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+keys = [k for k, v in d.get('aliases', {}).items() if v == sys.argv[2]]
+print(keys[0] if keys else '')
+" "$file" "$canonical"
+  fi
+}
+
+# Set an alias in the config file (read → modify → write)
+json_set_alias() {
+  local file="$1" mangled="$2" canonical="$3"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    local config
+    config=$(cat "$file")
+    echo "$config" | jq --arg m "$mangled" --arg c "$canonical" \
+      '.aliases[$m] = $c' > "${file}.tmp"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+d.setdefault('aliases', {})[sys.argv[2]] = sys.argv[3]
+with open(sys.argv[4], 'w', encoding='utf-8-sig') as f:
+    json.dump(d, f, indent=2)
+    f.write('\n')
+" "$file" "$mangled" "$canonical" "${file}.tmp"
+  fi
+  mv "${file}.tmp" "$file"
+}
+
+# Create a new config file
+json_create_config() {
+  local file="$1" repo="$2" mid="$3"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    jq -n --arg repo "$repo" --arg mid "$mid" \
+      '{sync_repo: $repo, machine_id: $mid, aliases: {}}' > "$file"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+with open(sys.argv[3], 'w', encoding='utf-8-sig') as f:
+    json.dump({'sync_repo': sys.argv[1], 'machine_id': sys.argv[2], 'aliases': {}}, f, indent=2)
+    f.write('\n')
+" "$repo" "$mid" "$file"
+  fi
+}
+
+# Update sync_repo and machine_id in existing config
+json_update_config() {
+  local file="$1" repo="$2" mid="$3"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    local config
+    config=$(cat "$file")
+    echo "$config" | jq --arg repo "$repo" --arg mid "$mid" \
+      '.sync_repo = $repo | .machine_id = $mid' > "${file}.tmp"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+d['sync_repo'] = sys.argv[2]
+d['machine_id'] = sys.argv[3]
+with open(sys.argv[4], 'w', encoding='utf-8-sig') as f:
+    json.dump(d, f, indent=2)
+    f.write('\n')
+" "$file" "$repo" "$mid" "${file}.tmp"
+  fi
+  mv "${file}.tmp" "$file"
+}
+
+# Update .sync-meta.json with last sync info
+json_update_meta() {
+  local file="$1" mid="$2" ts="$3"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    local existing
+    existing=$(cat "$file" 2>/dev/null || echo '{}')
+    echo "$existing" | jq --arg mid "$mid" --arg ts "$ts" \
+      '. * {last_sync: {machine: $mid, timestamp: $ts}}' > "${file}.tmp"
+    mv "${file}.tmp" "$file"
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+except:
+    d = {}
+d['last_sync'] = {'machine': sys.argv[2], 'timestamp': sys.argv[3]}
+with open(sys.argv[1], 'w', encoding='utf-8-sig') as f:
+    json.dump(d, f, indent=2)
+    f.write('\n')
+" "$file" "$mid" "$ts"
+  fi
+}
+
+# Print formatted last sync info, or empty string if never synced
+json_format_last_sync() {
+  local file="$1"
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    local last_sync
+    last_sync=$(jq -r '.last_sync // empty' "$file" 2>/dev/null || true)
+    if [[ -n "$last_sync" ]]; then
+      echo "$last_sync" | jq -r '"by \(.machine) at \(.timestamp)"'
+    fi
+  else
+    "$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+ls = d.get('last_sync')
+if ls:
+    print(f'by {ls[\"machine\"]} at {ls[\"timestamp\"]}')
+" "$file" 2>/dev/null || true
+  fi
+}
+
+# --- Config helpers ---
 
 require_config() {
   [[ -f "$CONFIG_FILE" ]] || die "Not set up. Run: claude-memory-sync setup <repo-url>"
 }
 
-read_config_field() {
-  jq -r "$1 // empty" "$CONFIG_FILE"
-}
-
 get_sync_repo() {
   local repo
-  repo=$(read_config_field '.sync_repo')
+  repo=$(json_read "$CONFIG_FILE" "sync_repo")
   [[ -n "$repo" ]] || die "sync_repo not set in config"
   repo="${repo/#\~/$HOME}"
   echo "$repo"
 }
 
 get_machine_id() {
-  read_config_field '.machine_id'
-}
-
-set_alias() {
-  local mangled="$1" canonical="$2"
-  require_config
-  local config
-  config=$(cat "$CONFIG_FILE")
-  echo "$config" | jq --arg m "$mangled" --arg c "$canonical" '.aliases[$m] = $c' > "${CONFIG_FILE}.tmp"
-  mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+  json_read "$CONFIG_FILE" "machine_id"
 }
 
 # --- Path / alias helpers ---
@@ -109,12 +258,11 @@ slugify_remote() {
 }
 
 # Resolve mangled name → canonical name
-# Priority: config alias → mangled name as fallback
 resolve_canonical() {
   local mangled="$1"
 
   local alias_val
-  alias_val=$(jq -r --arg m "$mangled" '.aliases[$m] // empty' "$CONFIG_FILE")
+  alias_val=$(json_get_alias "$CONFIG_FILE" "$mangled")
   if [[ -n "$alias_val" ]]; then
     echo "$alias_val"
     return
@@ -127,19 +275,16 @@ resolve_canonical() {
 find_local_for_canonical() {
   local canonical="$1"
 
-  # Check aliases
   local mangled
-  mangled=$(jq -r --arg c "$canonical" \
-    '.aliases | to_entries[] | select(.value == $c) | .key' \
-    "$CONFIG_FILE" 2>/dev/null | head -1)
+  mangled=$(json_find_alias_key "$CONFIG_FILE" "$canonical")
 
-  if [[ -n "$mangled" && -d "$PROJECTS_DIR/$mangled/memory" ]]; then
+  if [[ -n "$mangled" && -d "$PROJECTS_DIR/$mangled" ]]; then
     echo "$mangled"
     return
   fi
 
   # Direct match
-  if [[ -d "$PROJECTS_DIR/$canonical/memory" ]]; then
+  if [[ -d "$PROJECTS_DIR/$canonical" ]]; then
     echo "$canonical"
     return
   fi
@@ -199,7 +344,7 @@ cmd_setup() {
   local arg="${1:-}"
   [[ -n "$arg" ]] || die "Usage: claude-memory-sync setup <repo-url>  OR  setup --init"
 
-  require_jq
+  _init_json
 
   local sync_dir="$HOME/.claude-memory-sync"
 
@@ -221,18 +366,9 @@ cmd_setup() {
   # Create or update config
   if [[ -f "$CONFIG_FILE" ]]; then
     warn "Config already exists at $CONFIG_FILE — updating"
-    local config
-    config=$(cat "$CONFIG_FILE")
-    echo "$config" | jq \
-      --arg repo "$sync_dir" \
-      --arg mid "$machine_id" \
-      '.sync_repo = $repo | .machine_id = $mid' > "${CONFIG_FILE}.tmp"
-    mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    json_update_config "$CONFIG_FILE" "$sync_dir" "$machine_id"
   else
-    jq -n \
-      --arg repo "$sync_dir" \
-      --arg mid "$machine_id" \
-      '{sync_repo: $repo, machine_id: $mid, aliases: {}}' > "$CONFIG_FILE"
+    json_create_config "$CONFIG_FILE" "$sync_dir" "$machine_id"
     info "Config created at $CONFIG_FILE"
   fi
 
@@ -255,7 +391,7 @@ cmd_setup() {
 }
 
 cmd_push() {
-  require_jq
+  _init_json
   require_config
 
   local sync_repo machine_id
@@ -326,12 +462,7 @@ cmd_push() {
   local meta_file="$sync_repo/.sync-meta.json"
   local ts
   ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  local existing
-  existing=$(cat "$meta_file" 2>/dev/null || echo '{}')
-  echo "$existing" | jq \
-    --arg mid "$machine_id" \
-    --arg ts "$ts" \
-    '. * {last_sync: {machine: $mid, timestamp: $ts}}' > "$meta_file"
+  json_update_meta "$meta_file" "$machine_id" "$ts"
 
   # Commit and push
   git -C "$sync_repo" add -A
@@ -346,7 +477,7 @@ cmd_push() {
 }
 
 cmd_pull() {
-  require_jq
+  _init_json
   require_config
 
   local sync_repo
@@ -400,7 +531,7 @@ cmd_pull() {
 }
 
 cmd_status() {
-  require_jq
+  _init_json
   require_config
 
   local sync_repo machine_id
@@ -415,10 +546,10 @@ cmd_status() {
   if [[ -d "$sync_repo/.git" ]]; then
     local meta_file="$sync_repo/.sync-meta.json"
     if [[ -f "$meta_file" ]]; then
-      local last_sync
-      last_sync=$(jq -r '.last_sync // empty' "$meta_file" 2>/dev/null || true)
-      if [[ -n "$last_sync" ]]; then
-        echo "Last sync: $(echo "$last_sync" | jq -r '"by \(.machine) at \(.timestamp)"')"
+      local formatted
+      formatted=$(json_format_last_sync "$meta_file")
+      if [[ -n "$formatted" ]]; then
+        echo "Last sync: $formatted"
       else
         echo "Last sync: never"
       fi
@@ -436,7 +567,7 @@ cmd_status() {
 }
 
 cmd_list() {
-  require_jq
+  _init_json
   require_config
 
   local projects
@@ -464,7 +595,7 @@ cmd_list() {
 }
 
 cmd_alias() {
-  require_jq
+  _init_json
   require_config
 
   if [[ "${1:-}" == "--detect" ]]; then
@@ -490,7 +621,7 @@ cmd_alias() {
       warn "No git remote found — using directory name: $canonical"
     fi
 
-    set_alias "$mangled" "$canonical"
+    json_set_alias "$CONFIG_FILE" "$mangled" "$canonical"
     info "Alias set: $mangled → $canonical"
     return
   fi
@@ -500,7 +631,7 @@ cmd_alias() {
 
   [[ -n "$mangled" && -n "$canonical" ]] || die "Usage: claude-memory-sync alias <mangled-name> <canonical>  OR  alias --detect [path]"
 
-  set_alias "$mangled" "$canonical"
+  json_set_alias "$CONFIG_FILE" "$mangled" "$canonical"
   info "Alias set: $mangled → $canonical"
 }
 

@@ -7,8 +7,8 @@ Claude Code stores memories under `~/.claude/projects/*/memory/` using path-mang
 ## Prerequisites
 
 - **git** — for sync transport
-- **jq** — for bash script JSON parsing (`brew install jq` / `apt install jq` / `choco install jq`)
-- PowerShell 5.1+ — Windows script uses built-in JSON parsing, no jq needed
+- **jq** or **python3** — for bash script JSON parsing (uses jq if available, falls back to python3)
+- PowerShell 5.1+ — Windows script uses built-in JSON parsing, no extra dependencies
 
 ## Setup
 

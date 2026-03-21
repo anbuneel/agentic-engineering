@@ -24,6 +24,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Git writes progress to stderr which PowerShell treats as errors — suppress for git calls
+function Invoke-Git { git @args 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { "$_" } else { $_ } } }
 $script:VERSION = "1.0.0"
 $script:ConfigFile = if ($env:CLAUDE_MEMORY_SYNC_CONFIG) { $env:CLAUDE_MEMORY_SYNC_CONFIG } else { Join-Path $HOME ".claude-memory-sync.json" }
 $script:ClaudeDir = Join-Path $HOME ".claude"
@@ -71,9 +73,14 @@ function Read-Config {
     Get-Content $script:ConfigFile -Raw | ConvertFrom-Json
 }
 
+function Write-Utf8NoBom {
+    param([string]$Path, [string]$Text)
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding $false))
+}
+
 function Save-Config {
     param([psobject]$Config)
-    $Config | ConvertTo-Json -Depth 10 | Set-Content $script:ConfigFile -Encoding UTF8
+    Write-Utf8NoBom $script:ConfigFile ($Config | ConvertTo-Json -Depth 10)
 }
 
 function Get-SyncRepo {
@@ -142,7 +149,7 @@ function Find-LocalForCanonical {
     if ($config.aliases) {
         foreach ($prop in $config.aliases.PSObject.Properties) {
             if ($prop.Value -eq $Canonical) {
-                $localDir = Join-Path (Join-Path $script:ProjectsDir $prop.Name) "memory"
+                $localDir = Join-Path $script:ProjectsDir $prop.Name
                 if (Test-Path $localDir) {
                     return $prop.Name
                 }
@@ -151,7 +158,7 @@ function Find-LocalForCanonical {
     }
 
     # Direct match
-    $directDir = Join-Path (Join-Path $script:ProjectsDir $Canonical) "memory"
+    $directDir = Join-Path $script:ProjectsDir $Canonical
     if (Test-Path $directDir) {
         return $Canonical
     }
@@ -206,7 +213,7 @@ function Update-MemoryIndex {
         }
     }
 
-    $lines -join "`n" | Set-Content $indexFile -Encoding UTF8 -NoNewline
+    Write-Utf8NoBom $indexFile ($lines -join "`n")
 }
 
 # --- Commands ---
@@ -222,10 +229,10 @@ function Invoke-Setup {
     } elseif ($arg -eq "--init") {
         Write-Info "Initializing new sync repo at $syncDir..."
         New-Item -ItemType Directory -Path $syncDir -Force | Out-Null
-        git -C $syncDir init 2>&1
+        Invoke-Git -C $syncDir init
     } else {
         Write-Info "Cloning sync repo to $syncDir..."
-        git clone $arg $syncDir 2>&1
+        Invoke-Git clone $arg $syncDir
     }
 
     # Generate machine ID
@@ -250,7 +257,7 @@ function Invoke-Setup {
     $projectsPath = Join-Path $syncDir "projects"
     if (-not (Test-Path $projectsPath)) { New-Item -ItemType Directory -Path $projectsPath -Force | Out-Null }
     $metaFile = Join-Path $syncDir ".sync-meta.json"
-    if (-not (Test-Path $metaFile)) { '{}' | Set-Content $metaFile -Encoding UTF8 }
+    if (-not (Test-Path $metaFile)) { Write-Utf8NoBom $metaFile '{}' }
 
     Write-Info ""
     Write-Info "Setup complete."
@@ -273,7 +280,7 @@ function Invoke-Push {
 
     # Pull latest
     Write-Info "Pulling latest from remote..."
-    try { git -C $syncRepo pull --rebase 2>&1 } catch { Write-Warn "Pull failed -- continuing with local state" }
+    try { Invoke-Git -C $syncRepo pull --rebase } catch { Write-Warn "Pull failed -- continuing with local state" }
 
     $projects = Get-DiscoveredProjects
     $count = 0
@@ -320,19 +327,19 @@ function Invoke-Push {
     $ts = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $meta = if (Test-Path $metaFile) { Get-Content $metaFile -Raw | ConvertFrom-Json } else { [PSCustomObject]@{} }
     $meta | Add-Member -NotePropertyName last_sync -NotePropertyValue ([PSCustomObject]@{ machine = $machineId; timestamp = $ts }) -Force
-    $meta | ConvertTo-Json -Depth 10 | Set-Content $metaFile -Encoding UTF8
+    Write-Utf8NoBom $metaFile ($meta | ConvertTo-Json -Depth 10)
 
     # Commit and push
-    git -C $syncRepo add -A
-    git -C $syncRepo diff --cached --quiet 2>$null
+    Invoke-Git -C $syncRepo add -A
+    Invoke-Git -C $syncRepo diff --cached --quiet 2>$null
     $hasChanges = $LASTEXITCODE -ne 0
     if (-not $hasChanges) {
         Write-Info "No changes to push."
     } else {
-        git -C $syncRepo commit -m "sync from $machineId -- $ts" 2>&1
+        Invoke-Git -C $syncRepo commit -m "sync from $machineId -- $ts"
         Write-Info "Pushing..."
         try {
-            git -C $syncRepo push 2>&1
+            Invoke-Git -C $syncRepo push
             Write-Info "Pushed $count project(s)."
         } catch {
             Write-Warn "Push failed -- changes committed locally"
@@ -347,7 +354,7 @@ function Invoke-Pull {
     if (-not (Test-Path (Join-Path $syncRepo ".git"))) { Stop-Fatal "Sync repo not found at $syncRepo" }
 
     Write-Info "Pulling from remote..."
-    git -C $syncRepo pull --rebase 2>&1
+    Invoke-Git -C $syncRepo pull --rebase
     if ($LASTEXITCODE -ne 0) { Stop-Fatal "Pull failed" }
 
     $count = 0
@@ -408,8 +415,8 @@ function Invoke-Status {
 
         Write-Host ""
         Write-Host "Remote status:"
-        git -C $syncRepo fetch --quiet 2>$null
-        git -C $syncRepo status --short --branch
+        Invoke-Git -C $syncRepo fetch --quiet 2>$null
+        Invoke-Git -C $syncRepo status --short --branch
     } else {
         Write-Host "Sync repo not found at $syncRepo"
     }
@@ -451,7 +458,7 @@ function Invoke-Alias {
         $gitDir = Join-Path $projectPath ".git"
         if (Test-Path $gitDir) {
             try {
-                $remoteUrl = git -C $projectPath remote get-url origin 2>$null
+                $remoteUrl = Invoke-Git -C $projectPath remote get-url origin 2>$null
                 if ($remoteUrl) { $canonical = Get-RemoteSlug $remoteUrl }
             } catch {}
         }
