@@ -142,7 +142,7 @@ function Find-LocalForCanonical {
     if ($config.aliases) {
         foreach ($prop in $config.aliases.PSObject.Properties) {
             if ($prop.Value -eq $Canonical) {
-                $localDir = Join-Path $script:ProjectsDir $prop.Name "memory"
+                $localDir = Join-Path (Join-Path $script:ProjectsDir $prop.Name) "memory"
                 if (Test-Path $localDir) {
                     return $prop.Name
                 }
@@ -151,7 +151,7 @@ function Find-LocalForCanonical {
     }
 
     # Direct match
-    $directDir = Join-Path $script:ProjectsDir $Canonical "memory"
+    $directDir = Join-Path (Join-Path $script:ProjectsDir $Canonical) "memory"
     if (Test-Path $directDir) {
         return $Canonical
     }
@@ -285,8 +285,8 @@ function Invoke-Push {
 
     foreach ($mangled in $projects) {
         $canonical = Resolve-Canonical $mangled
-        $localMemory = Join-Path $script:ProjectsDir $mangled "memory"
-        $repoMemory = Join-Path $syncRepo "projects" $canonical "memory"
+        $localMemory = Join-Path (Join-Path $script:ProjectsDir $mangled) "memory"
+        $repoMemory = Join-Path (Join-Path (Join-Path $syncRepo "projects") $canonical) "memory"
 
         # Check for .md files (excluding MEMORY.md)
         $mdFiles = Get-ChildItem $localMemory -Filter "*.md" -File -ErrorAction SilentlyContinue |
@@ -365,7 +365,7 @@ function Invoke-Pull {
             Write-Info "No local mapping for $canonical -- creating as $canonical (run 'alias' to remap)"
         }
 
-        $localMemory = Join-Path $script:ProjectsDir $mangled "memory"
+        $localMemory = Join-Path (Join-Path $script:ProjectsDir $mangled) "memory"
         if (-not (Test-Path $localMemory)) { New-Item -ItemType Directory -Path $localMemory -Force | Out-Null }
 
         Write-Info "Pulling $canonical → $mangled"
