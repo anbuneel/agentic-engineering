@@ -1,0 +1,30 @@
+{
+  "provider": "codex",
+  "sync_repo": "~/.codex-setup-sync",
+  "machine_id": "desktop-win",
+  "components": {
+    "codex_config": true,
+    "rules": true,
+    "skills": true,
+    "memories": true,
+    "sessions_export": true,
+    "sessions_import": false,
+    "shell_profile": false,
+    "git_config": false,
+    "launch_wrappers": false
+  },
+  "paths": {
+    "codex_home": "~/.codex",
+    "agents_home": "~/.agents",
+    "powershell_profile": "~/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
+    "git_config": "~/.gitconfig"
+  },
+  "identities": {
+    "strategy": "git_remote_slug",
+    "aliases": {}
+  },
+  "launch": {
+    "codex_cli": "codex",
+    "codex_app": null
+  }
+}

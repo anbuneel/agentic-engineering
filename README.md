@@ -172,6 +172,18 @@ Syncs Claude Code's auto-generated project memories across machines via a privat
 
 Includes both bash and PowerShell scripts. Bash uses jq if available, falls back to python3. See the [tool README](tools/claude-memory-sync/README.md) for hook integration and full docs.
 
+### `codex-setup-sync` — Cross-Machine Codex Setup Sync
+
+[`tools/codex-setup-sync/`](tools/codex-setup-sync/) | Requires: git + PowerShell 5.1+
+
+Windows-first tool for keeping Codex app/CLI setup aligned across machines via a private git repo. Syncs portable Codex config, rules, memories, user skills, and optional completed session JSONL history while explicitly excluding auth, SQLite/runtime state, AppData internals, caches, and bundled system skills.
+
+**Commands:** `setup`, `doctor`, `status`, `push`, `pull`, `sync`, `alias`, `config print`, `session export`, `session import`
+
+**What makes it different:** It treats Codex state as three layers — shared portable state, machine-local overlays for path-specific trust entries, and local-only runtime/auth state that should never be synced. Session import stays opt-in and experimental.
+
+See the [tool README](tools/codex-setup-sync/README.md) for the config schema, sync repo layout, migration notes, and references to the official Codex docs.
+
 ---
 
 ## Agents

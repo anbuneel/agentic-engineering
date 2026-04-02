@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- `tools/codex-setup-sync/` — Windows-first PowerShell tool for syncing portable Codex setup across machines through a private git repo
+- Config rendering, machine-local overlays, optional session export/import, wrapper generation, and Pester coverage for `codex-setup-sync`
+
 ## [0.7.0] - 2026-03-10
 
 ### Changed
