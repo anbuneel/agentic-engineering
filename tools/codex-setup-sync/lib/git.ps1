@@ -4,7 +4,7 @@ function Test-GitInstalled {
 
 function Invoke-GitCommand {
     param(
-        [string[]]$Args,
+        [string[]]$GitArgs,
         [string]$WorkingDirectory,
         [switch]$AllowFailure,
         [switch]$PassThru
@@ -14,19 +14,19 @@ function Invoke-GitCommand {
         Throw-ToolError "git is required but was not found on PATH." 4
     }
 
-    $gitArgs = @()
+    $gitInvocationArgs = @()
     if ($WorkingDirectory -and (Test-Path -LiteralPath (Join-Path $WorkingDirectory ".git"))) {
-        $gitArgs += "-c"
-        $gitArgs += "safe.directory=$WorkingDirectory"
+        $gitInvocationArgs += "-c"
+        $gitInvocationArgs += "safe.directory=$WorkingDirectory"
     }
     if ($WorkingDirectory) {
-        $gitArgs += "-C"
-        $gitArgs += $WorkingDirectory
+        $gitInvocationArgs += "-C"
+        $gitInvocationArgs += $WorkingDirectory
     }
-    $gitArgs += $Args
+    $gitInvocationArgs += $GitArgs
 
     $lines = @()
-    & git @gitArgs 2>&1 | ForEach-Object {
+    & git @gitInvocationArgs 2>&1 | ForEach-Object {
         if ($_ -is [System.Management.Automation.ErrorRecord]) {
             $lines += $_.ToString()
         } else {
@@ -38,7 +38,7 @@ function Invoke-GitCommand {
 
     if (-not $AllowFailure -and $exitCode -ne 0) {
         $suffix = if ($output) { ": $output" } else { "" }
-        Throw-ToolError ("git {0} failed{1}" -f ($Args -join " "), $suffix) 3
+        Throw-ToolError ("git {0} failed{1}" -f ($GitArgs -join " "), $suffix) 3
     }
 
     if ($PassThru) {
@@ -54,7 +54,7 @@ function Invoke-GitCommand {
 function Test-GitRemoteConfigured {
     param([string]$RepoPath)
 
-    $result = Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("remote") -AllowFailure -PassThru
+    $result = Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("remote") -AllowFailure -PassThru
     if ($result.ExitCode -ne 0) {
         return $false
     }
@@ -64,7 +64,7 @@ function Test-GitRemoteConfigured {
 
 function Get-GitStatusShort {
     param([string]$RepoPath)
-    return Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("status", "--short")
+    return Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("status", "--short")
 }
 
 function Test-GitDirty {
@@ -74,7 +74,7 @@ function Test-GitDirty {
 
 function Get-GitRemoteUrl {
     param([string]$Path)
-    $result = Invoke-GitCommand -WorkingDirectory $Path -Args @("remote", "get-url", "origin") -AllowFailure -PassThru
+    $result = Invoke-GitCommand -WorkingDirectory $Path -GitArgs @("remote", "get-url", "origin") -AllowFailure -PassThru
     if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($result.Output)) {
         return $null
     }
@@ -86,7 +86,7 @@ function Git-InitRepository {
     param([string]$RepoPath)
 
     Ensure-Directory $RepoPath
-    Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("init") | Out-Null
+    Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("init") | Out-Null
 }
 
 function Git-CloneRepository {
@@ -96,12 +96,12 @@ function Git-CloneRepository {
     )
 
     Ensure-Directory (Split-Path -Parent $Destination)
-    Invoke-GitCommand -Args @("clone", $RepoUrl, $Destination) | Out-Null
+    Invoke-GitCommand -GitArgs @("clone", $RepoUrl, $Destination) | Out-Null
 }
 
 function Git-StageAll {
     param([string]$RepoPath)
-    Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("add", "-A") | Out-Null
+    Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("add", "-A") | Out-Null
 }
 
 function Git-CommitIfDirty {
@@ -115,7 +115,7 @@ function Git-CommitIfDirty {
     }
 
     Git-StageAll -RepoPath $RepoPath
-    Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("commit", "-m", $Message) | Out-Null
+    Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("commit", "-m", $Message) | Out-Null
     return $true
 }
 
@@ -125,7 +125,7 @@ function Git-PullRebaseIfRemote {
         return $false
     }
 
-    Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("pull", "--rebase") | Out-Null
+    Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("pull", "--rebase") | Out-Null
     return $true
 }
 
@@ -135,6 +135,6 @@ function Git-PushIfRemote {
         return $false
     }
 
-    Invoke-GitCommand -WorkingDirectory $RepoPath -Args @("push") | Out-Null
+    Invoke-GitCommand -WorkingDirectory $RepoPath -GitArgs @("push") | Out-Null
     return $true
 }

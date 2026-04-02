@@ -307,6 +307,11 @@ function Test-DirectoryHasFiles {
         return $false
     }
 
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    if (-not $item -or -not $item.PSIsContainer) {
+        return $false
+    }
+
     return [bool](Get-ChildItem -LiteralPath $Path -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
 }
 
