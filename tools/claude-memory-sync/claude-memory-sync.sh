@@ -24,13 +24,18 @@ Usage: claude-memory-sync <command> [options]
 Commands:
   setup <repo-url>                  Clone sync repo and create config
   setup --init                      Initialize a new local sync repo
-  sync                              Push then pull (full round-trip)
-  push                              Push local memories to sync repo
-  pull                              Pull memories from sync repo to local
+  sync [--delete] [--force]         Push then pull (full round-trip)
+  push [--delete] [--force]         Push local memories to sync repo (additive by default)
+  pull [--delete] [--force]         Pull memories from sync repo to local (additive by default)
   status                            Show sync status
+  doctor                            Run health checks against config, aliases, and repo state
   list                              List discovered projects and aliases
   alias <mangled-name> <canonical>  Set a manual alias
   alias --detect [project-path]     Auto-detect alias from git remote
+
+Push/pull flags:
+  --delete                          Propagate deletions (push: to repo; pull: from local). Files move to .trash/ for recovery.
+  --force                           Skip the 3-file safety threshold for --delete
 
 Options:
   --help     Show this help
@@ -303,6 +308,28 @@ discover_projects() {
   done
 }
 
+# Soft-delete: move a file into <sync_repo>/.trash/<canonical>/<timestamp>-<name>
+# so a botched sync run can be recovered without git surgery. Used by both
+# push --delete (repo-side) and pull --delete (local-side).
+move_to_trash() {
+  local file_path="$1" sync_repo="$2" canonical="$3"
+  local ts
+  ts=$(date -u +%Y%m%dT%H%M%SZ)
+  local trash_dir="$sync_repo/.trash/$canonical"
+  mkdir -p "$trash_dir"
+  local name
+  name=$(basename "$file_path")
+  mv "$file_path" "$trash_dir/$ts-$name"
+
+  # Ensure .trash/ is gitignored. Lazy-create on first trash usage.
+  local gitignore="$sync_repo/.gitignore"
+  if [[ ! -f "$gitignore" ]]; then
+    echo ".trash/" > "$gitignore"
+  elif ! grep -qxF ".trash/" "$gitignore"; then
+    echo ".trash/" >> "$gitignore"
+  fi
+}
+
 # Rebuild MEMORY.md index from the .md files present in a directory
 regenerate_memory_index() {
   local memory_dir="$1"
@@ -400,6 +427,16 @@ cmd_push() {
 
   [[ -d "$sync_repo/.git" ]] || die "Sync repo not found at $sync_repo"
 
+  # Push is additive by default; deletion is opt-in.
+  local allow_delete=false force=false
+  local delete_threshold=3
+  for arg in "$@"; do
+    case "$arg" in
+      --delete) allow_delete=true ;;
+      --force)  force=true ;;
+    esac
+  done
+
   # Pull latest first
   info "Pulling latest from remote..."
   git -C "$sync_repo" pull --rebase 2>&1 || warn "Pull failed — continuing with local state"
@@ -412,6 +449,41 @@ cmd_push() {
   if [[ -z "${projects:-}" ]]; then
     info "No project memories found."
     return
+  fi
+
+  # Phase 1: gather pending deletions across all projects so we can threshold-check
+  # BEFORE moving anything. Aborting mid-run would leave the repo half-modified.
+  # Format per line: <canonical>|<filepath>|<filename>
+  local pending_deletes=()
+  while IFS= read -r mangled; do
+    local canonical
+    canonical=$(resolve_canonical "$mangled")
+    local local_memory="$PROJECTS_DIR/$mangled/memory"
+    local repo_memory="$sync_repo/projects/$canonical/memory"
+    [[ -d "$repo_memory" ]] || continue
+
+    for rf in "$repo_memory"/*.md; do
+      [[ -f "$rf" ]] || continue
+      local rf_name
+      rf_name=$(basename "$rf")
+      [[ "$rf_name" == "MEMORY.md" ]] && continue
+      if [[ ! -f "$local_memory/$rf_name" ]]; then
+        pending_deletes+=("$canonical|$rf|$rf_name")
+      fi
+    done
+  done <<< "$projects"
+
+  if [[ ${#pending_deletes[@]} -gt 0 ]]; then
+    if ! $allow_delete; then
+      warn "Push is additive by default. ${#pending_deletes[@]} file(s) exist in the repo but not locally:"
+      for d in "${pending_deletes[@]}"; do
+        IFS='|' read -r d_canon _ d_name <<< "$d"
+        echo "    $d_canon/$d_name"
+      done
+      warn "To propagate these deletions, re-run with --delete (files move to .trash/ for recovery)."
+    elif [[ ${#pending_deletes[@]} -gt $delete_threshold ]] && ! $force; then
+      die "Refusing to delete ${#pending_deletes[@]} files (threshold: $delete_threshold). This usually means a misconfigured alias or empty local dir. Inspect the list above, then re-run with --delete --force if you're sure."
+    fi
   fi
 
   while IFS= read -r mangled; do
@@ -430,17 +502,15 @@ cmd_push() {
       cp "$f" "$repo_memory/"
     done
 
-    # Delete files from sync repo that no longer exist locally
-    for rf in "$repo_memory"/*.md; do
-      [[ -f "$rf" ]] || continue
-      [[ "$(basename "$rf")" == "MEMORY.md" ]] && continue
-      local rf_name
-      rf_name=$(basename "$rf")
-      if [[ ! -f "$local_memory/$rf_name" ]]; then
-        rm "$rf"
-        info "  Deleted (removed locally): $rf_name"
-      fi
-    done
+    # Soft-delete to .trash/ — only when user explicitly opted in via --delete.
+    if $allow_delete; then
+      for d in "${pending_deletes[@]}"; do
+        IFS='|' read -r d_canon d_path d_name <<< "$d"
+        [[ "$d_canon" == "$canonical" ]] || continue
+        move_to_trash "$d_path" "$sync_repo" "$canonical"
+        info "  Trashed (removed locally): $d_name"
+      done
+    fi
 
     # Regenerate index in sync repo
     regenerate_memory_index "$repo_memory"
@@ -478,6 +548,16 @@ cmd_pull() {
 
   [[ -d "$sync_repo/.git" ]] || die "Sync repo not found at $sync_repo"
 
+  # Pull is additive by default; deletion is opt-in (symmetric with push).
+  local allow_delete=false force=false
+  local delete_threshold=3
+  for arg in "$@"; do
+    case "$arg" in
+      --delete) allow_delete=true ;;
+      --force)  force=true ;;
+    esac
+  done
+
   info "Pulling from remote..."
   git -C "$sync_repo" pull --rebase 2>&1 || die "Pull failed"
 
@@ -485,6 +565,46 @@ cmd_pull() {
   local projects_dir="$sync_repo/projects"
 
   [[ -d "$projects_dir" ]] || { info "No projects in sync repo."; return; }
+
+  # Phase 1: gather pending local deletions across all projects.
+  # Format per line: <canonical>|<filepath>|<filename>
+  local pending_deletes=()
+  for canonical_dir in "$projects_dir"/*/; do
+    [[ -d "$canonical_dir" ]] || continue
+    local canonical
+    canonical=$(basename "$canonical_dir")
+    local repo_memory="$canonical_dir/memory"
+    [[ -d "$repo_memory" ]] || continue
+
+    local mangled
+    mangled=$(find_local_for_canonical "$canonical")
+    [[ -n "$mangled" ]] || continue
+    local local_memory="$PROJECTS_DIR/$mangled/memory"
+    [[ -d "$local_memory" ]] || continue
+
+    for lf in "$local_memory"/*.md; do
+      [[ -f "$lf" ]] || continue
+      local lf_name
+      lf_name=$(basename "$lf")
+      [[ "$lf_name" == "MEMORY.md" ]] && continue
+      if [[ ! -f "$repo_memory/$lf_name" ]]; then
+        pending_deletes+=("$canonical|$lf|$lf_name")
+      fi
+    done
+  done
+
+  if [[ ${#pending_deletes[@]} -gt 0 ]]; then
+    if ! $allow_delete; then
+      warn "Pull is additive by default. ${#pending_deletes[@]} local file(s) are not in the repo:"
+      for d in "${pending_deletes[@]}"; do
+        IFS='|' read -r d_canon _ d_name <<< "$d"
+        echo "    $d_canon/$d_name"
+      done
+      warn "To accept upstream deletions, re-run with --delete (files move to .trash/ for recovery)."
+    elif [[ ${#pending_deletes[@]} -gt $delete_threshold ]] && ! $force; then
+      die "Refusing to delete ${#pending_deletes[@]} local files (threshold: $delete_threshold). Inspect the list above, then re-run with --delete --force if you're sure."
+    fi
+  fi
 
   for canonical_dir in "$projects_dir"/*/; do
     [[ -d "$canonical_dir" ]] || continue
@@ -514,17 +634,15 @@ cmd_pull() {
       cp "$f" "$local_memory/"
     done
 
-    # Delete local files that were removed upstream
-    for lf in "$local_memory"/*.md; do
-      [[ -f "$lf" ]] || continue
-      [[ "$(basename "$lf")" == "MEMORY.md" ]] && continue
-      local lf_name
-      lf_name=$(basename "$lf")
-      if [[ ! -f "$repo_memory/$lf_name" ]]; then
-        rm "$lf"
-        info "  Deleted (removed upstream): $lf_name"
-      fi
-    done
+    # Soft-delete to .trash/ — only when user explicitly opted in via --delete.
+    if $allow_delete; then
+      for d in "${pending_deletes[@]}"; do
+        IFS='|' read -r d_canon d_path d_name <<< "$d"
+        [[ "$d_canon" == "$canonical" ]] || continue
+        move_to_trash "$d_path" "$sync_repo" "$canonical"
+        info "  Trashed (removed upstream): $d_name"
+      done
+    fi
 
     # Regenerate local index
     regenerate_memory_index "$local_memory"
@@ -599,6 +717,176 @@ cmd_list() {
   done <<< "$projects"
 }
 
+cmd_doctor() {
+  _init_json
+  require_config
+
+  local sync_repo machine_id
+  sync_repo=$(get_sync_repo)
+  machine_id=$(get_machine_id)
+  local issues=0
+
+  local C_OK C_WARN C_FAIL C_HEAD C_OFF
+  if [[ -t 1 ]]; then
+    C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_FAIL=$'\033[31m'; C_HEAD=$'\033[36m'; C_OFF=$'\033[0m'
+  else
+    C_OK=""; C_WARN=""; C_FAIL=""; C_HEAD=""; C_OFF=""
+  fi
+  check_ok()   { echo "  ${C_OK}[ok]${C_OFF} $*"; }
+  check_warn() { echo "  ${C_WARN}[!! ]${C_OFF} $*"; issues=$((issues + 1)); }
+  check_fail() { echo "  ${C_FAIL}[XX]${C_OFF} $*"; issues=$((issues + 1)); }
+
+  echo
+  echo "${C_HEAD}Config${C_OFF}"
+  check_ok "Config file: $CONFIG_FILE"
+  if [[ -n "$machine_id" ]]; then check_ok "machine_id: $machine_id"; else check_fail "machine_id missing"; fi
+  if [[ -d "$sync_repo/.git" ]]; then check_ok "sync_repo: $sync_repo"; else check_fail "sync_repo missing or not a git repo: $sync_repo"; fi
+
+  echo
+  echo "${C_HEAD}Aliases${C_OFF}"
+  # List aliases via json backend (works for both jq and python3)
+  local aliases_tsv
+  if [[ "$_JSON_CMD" == "jq" ]]; then
+    aliases_tsv=$(jq -r '.aliases // {} | to_entries[] | "\(.key)\t\(.value)"' "$CONFIG_FILE" 2>/dev/null || echo "")
+  else
+    aliases_tsv=$("$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+for k, v in d.get('aliases', {}).items():
+    print(f'{k}\t{v}')
+" "$CONFIG_FILE" 2>/dev/null || echo "")
+  fi
+
+  if [[ -z "$aliases_tsv" ]]; then
+    check_warn "No aliases defined"
+  else
+    declare -A value_counts=()
+    while IFS=$'\t' read -r key val; do
+      [[ -z "$key" ]] && continue
+      value_counts["$val"]="${value_counts["$val"]:+${value_counts["$val"]}, }$key"
+      if [[ -d "$PROJECTS_DIR/$key" ]]; then
+        check_ok "$key -> $val"
+      else
+        check_warn "$key -> $val: local dir does not exist"
+      fi
+    done <<< "$aliases_tsv"
+
+    for val in "${!value_counts[@]}"; do
+      local keys="${value_counts[$val]}"
+      if [[ "$keys" == *", "* ]]; then
+        check_warn "Multiple aliases -> '$val': $keys (reverse lookup may pick the wrong one)"
+      fi
+    done
+  fi
+
+  echo
+  echo "${C_HEAD}Local projects${C_OFF}"
+  if [[ -d "$PROJECTS_DIR" ]]; then
+    local unaliased=()
+    for d in "$PROJECTS_DIR"/*/memory; do
+      [[ -d "$d" ]] || continue
+      local proj
+      proj=$(basename "$(dirname "$d")")
+      local resolved
+      resolved=$(resolve_canonical "$proj")
+      # An unaliased project resolves to itself
+      if [[ "$resolved" == "$proj" ]]; then
+        # But it might still be the direct-match case; check if it's named in aliases as key
+        local has_alias_key
+        if [[ "$_JSON_CMD" == "jq" ]]; then
+          has_alias_key=$(jq -r --arg k "$proj" '.aliases // {} | has($k)' "$CONFIG_FILE")
+        else
+          has_alias_key=$("$_JSON_CMD" -c "
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8-sig'))
+print('true' if sys.argv[2] in d.get('aliases', {}) else 'false')
+" "$CONFIG_FILE" "$proj")
+        fi
+        [[ "$has_alias_key" == "true" ]] || unaliased+=("$proj")
+      fi
+    done
+    if [[ ${#unaliased[@]} -eq 0 ]]; then
+      check_ok "All local projects with memory/ are aliased"
+    else
+      for n in "${unaliased[@]}"; do
+        check_warn "$n has memory/ but no alias (will sync under raw name)"
+      done
+    fi
+  fi
+
+  echo
+  echo "${C_HEAD}Canonical names in repo${C_OFF}"
+  local repo_projects="$sync_repo/projects"
+  if [[ -d "$repo_projects" ]]; then
+    local unmapped=()
+    for d in "$repo_projects"/*/; do
+      [[ -d "$d" ]] || continue
+      local canon
+      canon=$(basename "$d")
+      local local_name
+      local_name=$(find_local_for_canonical "$canon")
+      [[ -z "$local_name" ]] && unmapped+=("$canon")
+    done
+    if [[ ${#unmapped[@]} -eq 0 ]]; then
+      check_ok "All canonical names resolve to a local dir"
+    else
+      for n in "${unmapped[@]}"; do
+        check_warn "Canonical '$n' has no local mapping (next pull will create '$n' locally)"
+      done
+    fi
+  fi
+
+  echo
+  echo "${C_HEAD}Sync repo state${C_OFF}"
+  local branch
+  branch=$(git -C "$sync_repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+    check_ok "On branch $branch"
+  else
+    check_warn "On non-default branch '$branch' (expected main/master)"
+  fi
+  git -C "$sync_repo" fetch --quiet 2>/dev/null || true
+  local ahead behind
+  ahead=$(git -C "$sync_repo" rev-list --count "@{u}..HEAD" 2>/dev/null || echo 0)
+  behind=$(git -C "$sync_repo" rev-list --count "HEAD..@{u}" 2>/dev/null || echo 0)
+  if [[ "$ahead" -gt 0 ]]; then check_warn "$ahead commit(s) ahead of remote (unpushed)"; fi
+  if [[ "$behind" -gt 0 ]]; then check_warn "$behind commit(s) behind remote (unpulled)"; fi
+  if [[ "$ahead" -eq 0 && "$behind" -eq 0 ]]; then check_ok "In sync with remote"; fi
+
+  echo
+  echo "${C_HEAD}Trash${C_OFF}"
+  local trash_dir="$sync_repo/.trash"
+  if [[ -d "$trash_dir" ]]; then
+    local trash_count
+    trash_count=$(find "$trash_dir" -type f 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$trash_count" -gt 0 ]]; then
+      check_warn "$trash_count recoverable file(s) in .trash/ (review and clean manually)"
+    else
+      check_ok ".trash/ is empty"
+    fi
+  else
+    check_ok ".trash/ does not exist (nothing has been deleted)"
+  fi
+
+  echo
+  echo "${C_HEAD}Last sync${C_OFF}"
+  local meta_file="$sync_repo/.sync-meta.json"
+  if [[ -f "$meta_file" ]]; then
+    local formatted
+    formatted=$(json_format_last_sync "$meta_file" || echo "")
+    if [[ -n "$formatted" ]]; then
+      check_ok "$formatted"
+    fi
+  fi
+
+  echo
+  if [[ "$issues" -eq 0 ]]; then
+    echo "${C_OK}All checks passed.${C_OFF}"
+  else
+    echo "${C_WARN}$issues issue(s) found. Review the warnings above.${C_OFF}"
+  fi
+}
+
 cmd_alias() {
   _init_json
   require_config
@@ -652,6 +940,7 @@ main() {
     push)      cmd_push "$@" ;;
     pull)      cmd_pull "$@" ;;
     status)    cmd_status "$@" ;;
+    doctor)    cmd_doctor "$@" ;;
     list)      cmd_list "$@" ;;
     alias)     cmd_alias "$@" ;;
     --version|-v) echo "claude-memory-sync $VERSION" ;;

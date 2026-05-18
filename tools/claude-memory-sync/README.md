@@ -52,13 +52,21 @@ Claude Code stores memories under `~/.claude/projects/*/memory/` using path-mang
 |---------|-------------|
 | `setup <repo-url>` | Clone sync repo and create config |
 | `setup --init` | Initialize a new local sync repo |
-| `sync` | Push then pull (full round-trip) |
-| `push` | Push local memories to sync repo |
-| `pull` | Pull memories from sync repo to local |
+| `sync [--delete] [--force]` | Push then pull (full round-trip) |
+| `push [--delete] [--force]` | Push local memories to sync repo (additive by default) |
+| `pull [--delete] [--force]` | Pull memories from sync repo to local (additive by default) |
 | `status` | Show sync status and last sync info |
+| `doctor` | Run health checks against config, aliases, and repo state |
 | `list` | List discovered projects and their aliases |
 | `alias <mangled> <canonical>` | Manually map a local project name to a canonical name |
 | `alias --detect [path]` | Auto-detect canonical name from git remote |
+
+### Push/pull flags
+
+| Flag | Description |
+|------|-------------|
+| `--delete` | Propagate deletions (push: remove from repo; pull: remove from local). Files move to `.trash/` for recovery. |
+| `--force` | Skip the 3-file safety threshold for `--delete` (use only after inspecting the listed files). |
 
 ## Alias Resolution
 
@@ -130,9 +138,89 @@ This pushes any stale local changes from the last session, then pulls the latest
 
 ## Deletion Propagation
 
-When you delete a memory file locally and `push`, the file is also removed from the sync repo. The next `pull` on another machine will not bring it back.
+Both `push` and `pull` are **additive by default** — they never remove files. This protects against accidental data loss from misconfigured aliases, empty local dirs, or sync running before a project has any memories.
 
-This only applies to projects you're actively syncing — files from projects you haven't pushed from this machine are left untouched.
+If files exist on one side but not the other, sync reports them and exits without deleting:
+
+```
+warning: Push is additive by default. 2 file(s) exist in the repo but not locally:
+    paira/codex-patterns.md
+    paira/paira.md
+warning: To propagate these deletions, re-run with --delete (files move to .trash/ for recovery).
+```
+
+### Opting in to delete
+
+To actually propagate deletions, pass `--delete`:
+
+```bash
+# Push side: remove from sync repo, files that no longer exist locally
+claude-memory-sync push --delete
+
+# Pull side: remove from local, files that no longer exist in repo
+claude-memory-sync pull --delete
+
+# Both halves of sync
+claude-memory-sync sync --delete
+```
+
+Files are **soft-deleted** to `<sync_repo>/.trash/<canonical>/<timestamp>-<filename>` rather than `rm`-ed. The `.trash/` directory is gitignored, so soft-deleted files don't pollute the repo history but stay recoverable until you clean them up manually.
+
+### Safety threshold
+
+If `--delete` would remove more than **3 files in one run**, the operation aborts:
+
+```
+error: Refusing to delete 8 files (threshold: 3). This usually means a misconfigured alias or empty local dir. Inspect the list above, then re-run with --delete --force if you're sure.
+```
+
+Pass `--force` to override after you've verified the list:
+
+```bash
+claude-memory-sync push --delete --force
+```
+
+## Health Check
+
+Run `claude-memory-sync doctor` to verify your setup:
+
+```
+Config
+  [ok] Config file: ~/.claude-memory-sync.json
+  [ok] machine_id: anbu-laptop-windows
+  [ok] sync_repo: ~/.claude-memory-sync
+
+Aliases
+  [ok] D--anbs-dev-my-project -> owner-my-project
+  [!! ] Multiple aliases -> 'paira': c--anbs-dev--paira, c--anbs-dev-paira
+
+Local projects
+  [ok] All local projects with memory/ are aliased
+
+Canonical names in repo
+  [ok] All canonical names resolve to a local dir
+
+Sync repo state
+  [ok] On branch main
+  [ok] In sync with remote
+
+Trash
+  [ok] .trash/ is empty
+
+Last sync
+  [ok] 2026-05-18T03:05:30Z by anbu-laptop-windows (this machine)
+```
+
+Doctor reports:
+- Aliases pointing to non-existent local dirs
+- Local projects with `memory/` but no alias (will sync under raw cwd name)
+- Canonical names in the repo with no local mapping (next pull would create a sync-artifact dir)
+- Multiple aliases mapping to the same canonical (ambiguous reverse lookup)
+- Sync repo on non-default branch, or commits ahead/behind remote
+- Recoverable files in `.trash/`
+- Last sync timestamp and which machine performed it
+
+Run it any time something feels off, especially after renaming projects or before pushing on a long-untouched machine.
 
 ## New Machine Setup
 
