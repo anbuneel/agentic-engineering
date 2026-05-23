@@ -313,6 +313,9 @@ discover_projects() {
 # push --delete (repo-side) and pull --delete (local-side).
 move_to_trash() {
   local file_path="$1" sync_repo="$2" canonical="$3"
+  # Skip if the file is already gone — happens when duplicate aliases
+  # (multiple local dirs -> same canonical) queue the same repo deletion twice.
+  [[ -f "$file_path" ]] || return 1
   local ts
   ts=$(date -u +%Y%m%dT%H%M%SZ)
   local trash_dir="$sync_repo/.trash/$canonical"
@@ -503,12 +506,16 @@ cmd_push() {
     done
 
     # Soft-delete to .trash/ — only when user explicitly opted in via --delete.
+    # When multiple local dirs alias to the same canonical, the same repo
+    # deletion can be queued multiple times — move_to_trash returns non-zero on
+    # the second attempt so we don't double-log.
     if $allow_delete; then
       for d in "${pending_deletes[@]}"; do
         IFS='|' read -r d_canon d_path d_name <<< "$d"
         [[ "$d_canon" == "$canonical" ]] || continue
-        move_to_trash "$d_path" "$sync_repo" "$canonical"
-        info "  Trashed (removed locally): $d_name"
+        if move_to_trash "$d_path" "$sync_repo" "$canonical"; then
+          info "  Trashed (removed locally): $d_name"
+        fi
       done
     fi
 
@@ -639,8 +646,9 @@ cmd_pull() {
       for d in "${pending_deletes[@]}"; do
         IFS='|' read -r d_canon d_path d_name <<< "$d"
         [[ "$d_canon" == "$canonical" ]] || continue
-        move_to_trash "$d_path" "$sync_repo" "$canonical"
-        info "  Trashed (removed upstream): $d_name"
+        if move_to_trash "$d_path" "$sync_repo" "$canonical"; then
+          info "  Trashed (removed upstream): $d_name"
+        fi
       done
     fi
 

@@ -205,12 +205,16 @@ function Move-ToTrash {
         [Parameter(Mandatory)][string]$SyncRepo,
         [Parameter(Mandatory)][string]$Canonical
     )
+    # Skip if the file is already gone — happens when duplicate aliases (multiple
+    # local dirs → same canonical) queue the same repo deletion more than once.
+    if (-not (Test-Path $FilePath)) { return $false }
     $ts = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
     $trashDir = Join-Path (Join-Path $SyncRepo ".trash") $Canonical
     if (-not (Test-Path $trashDir)) { New-Item -ItemType Directory -Path $trashDir -Force | Out-Null }
     $fileName = Split-Path $FilePath -Leaf
     $dest = Join-Path $trashDir "$ts-$fileName"
     Move-Item -Path $FilePath -Destination $dest -Force
+    return $true
 
     # Ensure .trash/ is gitignored. Lazy-create .gitignore on first trash usage.
     $gitignore = Join-Path $SyncRepo ".gitignore"
@@ -394,11 +398,14 @@ function Invoke-Push {
         }
 
         # Soft-delete to .trash/ — only when user explicitly opted in via --delete.
+        # When multiple local dirs alias to the same canonical, the same repo
+        # deletion can be queued multiple times — Move-ToTrash returns $false on
+        # the second attempt so we don't double-log.
         if ($allowDelete) {
             $projectDeletes = $pendingDeletes | Where-Object { $_.Canonical -eq $canonical }
             foreach ($d in $projectDeletes) {
-                Move-ToTrash -FilePath $d.FilePath -SyncRepo $syncRepo -Canonical $canonical
-                Write-Info "  Trashed (removed locally): $($d.Name)"
+                $moved = Move-ToTrash -FilePath $d.FilePath -SyncRepo $syncRepo -Canonical $canonical
+                if ($moved) { Write-Info "  Trashed (removed locally): $($d.Name)" }
             }
         }
 
@@ -516,8 +523,8 @@ function Invoke-Pull {
         if ($allowDelete) {
             $projectDeletes = $pendingDeletes | Where-Object { $_.Canonical -eq $canonical }
             foreach ($d in $projectDeletes) {
-                Move-ToTrash -FilePath $d.FilePath -SyncRepo $syncRepo -Canonical $canonical
-                Write-Info "  Trashed (removed upstream): $($d.Name)"
+                $moved = Move-ToTrash -FilePath $d.FilePath -SyncRepo $syncRepo -Canonical $canonical
+                if ($moved) { Write-Info "  Trashed (removed upstream): $($d.Name)" }
             }
         }
 
