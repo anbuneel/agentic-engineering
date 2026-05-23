@@ -134,7 +134,53 @@ Auto-sync on every Claude Code session by adding a `SessionStart` hook to `~/.cl
 }
 ```
 
-This pushes any stale local changes from the last session, then pulls the latest from other machines. No `SessionEnd` hook needed — the next session start picks up anything unpushed.
+This pushes any stale local changes from the last session, then pulls the latest from other machines.
+
+### Installing the hook (step by step)
+
+`~/.claude/settings.json` is **per-machine** and is not synced by this tool — set up the hook independently on every machine where you want auto-sync.
+
+1. **Locate `settings.json`:**
+   - Windows: `%USERPROFILE%\.claude\settings.json`
+   - macOS / Linux: `~/.claude/settings.json`
+
+   If the file doesn't exist, Claude Code creates it on first run. Start Claude Code once, or create the file manually with `{}`.
+
+2. **Edit, don't replace.** Most users already have keys like `permissions`, `statusLine`, `enabledPlugins`. Add the `hooks` key alongside them — don't paste the snippet over the whole file.
+
+3. **Make sure `claude-memory-sync` is callable from the hook's shell.** Two options:
+   - **Tool on PATH (recommended):** keep the command clean — `"command": "claude-memory-sync sync"`. Add the script directory to PATH, or drop a thin wrapper (e.g. `claude-memory-sync.cmd` on Windows, a symlink on macOS/Linux) into a directory already on PATH.
+   - **Full script path (no PATH setup):**
+     - macOS / Linux / Git Bash: `"command": "bash '/full/path/to/claude-memory-sync.sh' sync"`
+     - Windows PowerShell: `"command": "powershell -NoProfile -ExecutionPolicy Bypass -File 'C:\\path\\to\\claude-memory-sync.ps1' sync"`
+
+4. **Validate the JSON before relying on it.** A missing comma or stray tab character breaks the whole settings file. Quick checks:
+   - PowerShell: `Get-Content $env:USERPROFILE\.claude\settings.json -Raw | ConvertFrom-Json`
+   - Bash: `python -m json.tool < ~/.claude/settings.json`
+   - Or open in any editor with JSON syntax checking
+
+   If Claude Code's `/doctor` reports `Invalid or malformed JSON`, fix the syntax — usually a missing comma at a key boundary or an unexpected tab in the indentation.
+
+5. **Verify the hook fires.** Start a new Claude Code session in any project. The hook's output (e.g. `Pulling from remote... Pulled N project(s).`) appears in the session start banner. After the session loads, run `claude-memory-sync status` to confirm the last sync timestamp updated.
+
+### Belt-and-suspenders: also push on `SessionEnd`
+
+The SessionStart hook alone is sufficient — the next session on this machine will push anything unpushed. But if you bounce between machines frequently and want each session's memories on the remote *immediately* (so the other machine sees them the moment its next session starts), add a `SessionEnd` hook that runs `push`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "claude-memory-sync sync", "timeout": 30 }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "claude-memory-sync push", "timeout": 30 }] }
+    ]
+  }
+}
+```
+
+Tradeoff: the SessionEnd hook briefly delays Claude Code's shutdown to run the push.
 
 ## Deletion Propagation
 
