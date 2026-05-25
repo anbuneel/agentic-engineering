@@ -24,6 +24,14 @@ Requires **git**, **gh** (authenticated), and **codex CLI**. For remote agent re
 
 ---
 
+## Options
+
+Sub-agent Task dispatches default to **`sonnet`** to control cost. To override for one run, invoke with `model=opus` or `model=haiku` (e.g. `/multi-agent-code-review model=opus`).
+
+Parse this at start: look for `model=<sonnet|opus|haiku>` in the user's invocation message, default `sonnet`, store as `SUB_AGENT_MODEL`. Print `Sub-agent model: ${SUB_AGENT_MODEL}` so the user sees the cost tier in use. Pass `model: ${SUB_AGENT_MODEL}` on every Task tool dispatch in this skill.
+
+---
+
 ## Agent Instructions
 
 When invoked, execute the following phases sequentially.
@@ -116,7 +124,7 @@ If changes made: run quality gates (lint, typecheck, test, build — each as a s
 
 ### Step 1: Pre-Review (Claude runs natively)
 
-Launch pr-review-toolkit agents in parallel:
+Launch pr-review-toolkit agents in parallel (use the Task tool with `model: ${SUB_AGENT_MODEL}` on each):
 
 1. `pr-review-toolkit:code-reviewer`
 2. `pr-review-toolkit:silent-failure-hunter`

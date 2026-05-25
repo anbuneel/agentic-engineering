@@ -52,6 +52,8 @@ graph TD
 
 > **Requires:** git, gh, Codex CLI. Optional: GitHub bot apps (Claude, Devin, Codex GH)
 >
+> **Options:** `model=<sonnet|opus|haiku>` — sub-agent Task model (default `sonnet`)
+>
 > **Output:** `docs/reviews/code-review-{id}.md`
 >
 > **Key features:** Parallel Codex + GH bot polling, GH bot finding verification via cross-round fingerprinting, MUST FIX committed before SHOULD FIX (safe rollback), adaptive polling timeout
@@ -116,6 +118,8 @@ graph TD
 ```
 
 > **Requires:** Claude (always). Optional: Codex CLI, Gemini CLI
+>
+> **Options:** `model=<sonnet|opus|haiku>` — Claude Task model (default `sonnet`; Codex/Gemini unaffected)
 >
 > **Output:** `{review-dir}/report-{id}.md`
 >
@@ -202,6 +206,8 @@ graph TD
 ```
 
 > **Requires:** git. Optional: Codex CLI
+>
+> **Options:** `model=<sonnet|opus|haiku>` — sub-agent Task model (default `sonnet`)
 >
 > **Output:** `docs/analysis/security-audit-{id}.md`
 >

@@ -25,6 +25,14 @@ Requires **codex CLI** and **gemini CLI** for full council. Claude runs natively
 
 ---
 
+## Options
+
+The Claude Task dispatch defaults to **`sonnet`** to control cost. To override for one run, invoke with `model=opus` or `model=haiku` (e.g. `/multi-agent-ideate model=opus`).
+
+Parse this at start: look for `model=<sonnet|opus|haiku>` in the user's invocation message, default `sonnet`, store as `SUB_AGENT_MODEL`. Print `Sub-agent model: ${SUB_AGENT_MODEL}` so the user sees the cost tier in use. Pass `model: ${SUB_AGENT_MODEL}` on the Claude Task dispatch in this skill. (Codex and Gemini run via their own CLIs — this option does not affect them.)
+
+---
+
 ## Agent Instructions
 
 When invoked, execute the following steps sequentially.
@@ -116,7 +124,7 @@ natural, but make each distinct idea clearly identifiable.
 
 Run all available models **in parallel**:
 
-**Claude** — Launch a Task agent:
+**Claude** — Launch a Task agent (pass `model: ${SUB_AGENT_MODEL}` on the Task call):
 - If the topic is **UI/UX related** (design feedback, layout, styling, components, visual improvements), use `subagent_type: frontend-design` — this leverages the specialized frontend-design skill for higher-quality UI/UX output
 - For **all other topics** (architecture, naming, API design, performance, etc.), use `subagent_type: general-purpose`
 - Prompt with the base template
