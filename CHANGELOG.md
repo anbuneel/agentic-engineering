@@ -7,6 +7,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Added
 - `tools/codex-setup-sync/` — Windows-first PowerShell tool for syncing portable Codex setup across machines through a private git repo
 - Config rendering, machine-local overlays, optional session export/import, wrapper generation, and Pester coverage for `codex-setup-sync`
+- Agent-agnostic reviewer registry model for shipped skills, covering primary driver, native subagents, external CLI reviewers, common GitHub review agents, skipped reviewers, and reviewer independence notes
+- `scripts/install-skill-links.ps1` for symlinking shipped skills into Claude Code, Codex `$CODEX_HOME/skills`, or shared `~/.agents/skills`
+
+### Changed
+- Reframed shipped skills and docs from Claude-first workflows to Claude/Codex-compatible primary-driver workflows
+- Updated multi-agent review, plan review, ideation, and security audit flows to support dynamic reviewer discovery and degraded-mode artifacts
+- Tightened reviewer contracts with concrete Claude CLI invocation/resume semantics, advisory-vs-required reviewer rules, Codex sandbox prerequisites, and same-family reviewer labeling
+- Hardened headless Claude reviewer commands with explicit read-only tool grants, edit/write denials, and `PROJECT_ROOT` cwd requirements
+- Replaced Windows hard-link install guidance with symbolic-link guidance for cross-drive development setups
 
 ## [0.7.0] - 2026-03-10
 

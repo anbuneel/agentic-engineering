@@ -9,7 +9,7 @@ description: >
 
 # Merge & Document
 
-Squash-merge the current PR and update all project documentation. Follow these steps exactly.
+Squash-merge the current PR and update project documentation. This skill is driver-neutral: the **primary driver** is whichever agent is executing it (Claude Code, Codex App, or Codex CLI). Follow these steps exactly.
 
 ## When to Invoke
 
@@ -19,6 +19,12 @@ Squash-merge the current PR and update all project documentation. Follow these s
 ## Prerequisites
 
 Requires **git** and **gh** (authenticated).
+
+---
+
+## Runtime Adapter
+
+Use the primary driver's native file-read and file-edit capabilities for documentation updates, and standalone shell commands for git/gh operations. Claude Code may use Read/Write/Edit/Bash; Codex may use native file/edit/shell tools. Do not require subagents.
 
 ---
 
@@ -122,7 +128,7 @@ Read each file before editing. Only update files that exist — do NOT create ne
 
 **CHANGELOG.md** — If the file exists, add an entry under the appropriate section (Added, Changed, Fixed, Removed). Use the PR title and number as the entry. Skip if no CHANGELOG exists.
 
-**CLAUDE.md** — If the merged PR introduced new patterns, conventions, architectural decisions, or learnings, add them. Skip if nothing changed.
+**Agent guidance docs** — If the merged PR introduced new patterns, conventions, architectural decisions, or learnings, update existing guidance files such as `AGENTS.md`, `CLAUDE.md`, or equivalent local agent docs. Skip if nothing changed.
 
 **Other tracking docs** — If the project has a roadmap, TODO, or project board doc, update it to reflect the completed work.
 

@@ -1,42 +1,51 @@
 # Skills Guide
 
-Visual flow diagrams for every skill in the Agentic Engineering toolkit. For detailed descriptions and setup instructions, see the [README](../README.md).
+Visual flow diagrams for every shipped skill in the Agentic Engineering toolkit. For detailed descriptions and setup instructions, see the [README](../README.md).
 
 ## Quick Navigation
 
 | Category | Skills | Pattern |
 |----------|--------|---------|
-| Collaboration | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` | Counter-review + convergence |
+| Collaboration | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` | Primary driver + reviewer registry + counter-review |
 | Workflow | `/merge` | Linear pipeline |
 | Security | `/security-scan`, `/security-audit`, `/security-posture` | Analysis + reporting |
 
 ---
 
+## Shared Runtime Model
+
+Multi-agent skills use a runtime adapter and reviewer registry instead of assuming one primary agent. The primary driver is detected as `claude-code`, `codex-app`, `codex-cli`, or `unknown`. Reviewers are classified as primary-native, native subagents, external CLI reviewers, GitHub review agents, skipped, or secondary same-family.
+
+External reviewers are advisory by default. A reviewer becomes required only when the user explicitly requests it; skipped advisory reviewers reduce confidence but do not block convergence. When Codex is primary, Claude CLI reviewers run with `--permission-mode plan`, explicit read-only `--allowedTools`, edit/write-denying `--disallowedTools`, and `--output-format json`; they store `externalThreadIds.claude` and resume with `--resume` where the workflow has multiple rounds. Launch Claude CLI from `PROJECT_ROOT` because Claude has no Codex-style `-C` flag.
+
+---
+
 ## `/multi-agent-code-review` — Multi-Agent Code Review
 
-Multi-round review across Codex CLI and GitHub bots with counter-review, decision gates, and convergence tracking. Min 2 rounds, max 5.
+Multi-round review across the primary driver, native subagents, external CLI reviewers, and GitHub review agents with counter-review, decision gates, and convergence tracking. Min 2 rounds, max 5.
 
 ```mermaid
 graph TD
     A[Preflight] --> B{Diff < 20 lines?}
     B -- Yes --> D[Pre-Review]
-    B -- No --> C["/simplify"]
+    B -- No --> C["Simplification Pass"]
     C --> D
 
-    D --> D1[code-reviewer]
-    D --> D2[silent-failure-hunter]
-    D --> D3[type-design-analyzer]
-    D1 & D2 & D3 --> E[Counter-Review + Decision Gate]
+    D --> D0[Primary-Native Review]
+    D --> D1[Native Code Reviewer]
+    D --> D2[Native Silent-Failure Hunter]
+    D --> D3[Native Type/Design Analyzer]
+    D0 & D1 & D2 & D3 --> E[Counter-Review + Decision Gate]
     E --> F[Fix + Quality Gates + Commit]
     F --> G[Create PR + Push]
 
     G --> H[Round N]
 
     subgraph "Review Loop (2-5 rounds)"
-        H --> I[Task 1: Codex CLI Review]
-        H --> J["Task 2: Poll GH Bots\n(8 min R1 / 4 min R2+)"]
+        H --> I[External CLI Reviewers]
+        H --> J["Common GH Agents\n(Claude, Codex GH, Devin, future bots)"]
         I & J --> K[Sync Point]
-        K --> L["Consolidate + GH Bot Verification\n(fingerprint cross-check)"]
+        K --> L["Consolidate + GH Agent Verification\n(fingerprint cross-check)"]
         L --> M[Counter-Review + Decision Gate]
         M --> N{Converged?}
         N -- "No (fixes needed)" --> O[Fix + Quality Gates + Commit]
@@ -50,23 +59,23 @@ graph TD
     Q --> T[Write Review Artifact]
 ```
 
-> **Requires:** git, gh, Codex CLI. Optional: GitHub bot apps (Claude, Devin, Codex GH)
+> **Requires:** git, gh. Optional: native subagents, Claude/Codex/Gemini CLI reviewers, GitHub bot apps (Claude, Devin, Codex GH)
 >
-> **Options:** `model=<sonnet|opus|haiku>` — sub-agent Task model (default `sonnet`)
+> **Options:** `effort=<fast|balanced|deep>` — cross-agent effort intent. Claude Code also supports `model=<sonnet|opus|haiku>` for compatibility.
 >
 > **Output:** `docs/reviews/code-review-{id}.md`
 >
-> **Key features:** Parallel Codex + GH bot polling, GH bot finding verification via cross-round fingerprinting, MUST FIX committed before SHOULD FIX (safe rollback), adaptive polling timeout
+> **Key features:** Dynamic reviewer registry, common GH agent polling, concrete Claude CLI reviewer channel when Codex is primary, GH finding verification via cross-round fingerprinting, MUST FIX committed before SHOULD FIX (safe rollback)
 
 ---
 
 ## `/multi-agent-plan-review` — Two-Agent Plan Review
 
-Claude and Codex CLI take turns reviewing a plan document. Each round: Codex reviews, Claude counter-reviews with dispositions, user resolves disputes, Claude revises. Min 2 rounds, max 5.
+The primary driver sends a plan document to available external reviewers. Each round: reviewers critique, primary driver counter-reviews with dispositions, user resolves disputes, primary driver revises. Min 2 rounds, max 5.
 
 ```mermaid
 graph TD
-    A[Setup + Read Plan] --> B[Codex Review]
+    A[Setup + Read Plan] --> B[External Reviewer Pass]
     B --> C{Verdict?}
 
     C -- "REVISE (or Round < 2)" --> D[Counter-Review]
@@ -74,42 +83,41 @@ graph TD
     E -- Yes --> F[Decision Gate: User Breaks Tie]
     E -- No --> G[Revise Plan]
     F --> G
-    G --> H["Resume Codex (same session)"]
+    G --> H["Resume Reviewer Sessions\n(where supported)"]
     H --> C
 
     C -- "APPROVED (Round ≥ 2)" --> I[Write Review Artifact]
     C -- "Max Rounds (5)" --> I
 ```
 
-> **Requires:** Codex CLI
+> **Requires:** primary driver. Optional: Claude/Codex/Gemini reviewer channels
 >
 > **Output:** `docs/reviews/plan-review-{id}.md`
 >
-> **Key features:** Codex session resume (context preserved across rounds), full audit trail of every finding + disposition + revision
+> **Key features:** reviewer session resume where supported, full audit trail of every finding + disposition + revision
 
 ---
 
 ## `/multi-agent-ideate` — Multi-Model Brainstorming Council
 
-Three models brainstorm independently on any topic, then Claude synthesizes and each model counter-reviews. Works with any subset of models.
+Available participants brainstorm independently on any topic, then the primary driver synthesizes and each participant counter-reviews. Works with any subset of models.
 
 ```mermaid
 graph TD
     A[Capture Brief] --> B[Parallel Brainstorming]
 
-    B --> C[Claude]
-    B --> D["Codex (optional)"]
-    B --> E["Gemini (optional)"]
+    B --> C[Primary Driver]
+    B --> D["Claude Reviewer (optional)"]
+    B --> E["Codex Reviewer (optional)"]
+    B --> F["Gemini Reviewer (optional)"]
 
-    C & D & E --> F[Claude Synthesizes]
-    F --> G[Tag Consensus Levels]
+    C & D & E & F --> G[Primary Driver Synthesizes]
     G --> H[Counter-Review]
 
-    H --> I["Codex: endorse / challenge / enhance / new"]
-    H --> J["Gemini: endorse / challenge / enhance / new"]
-    H --> K["Claude: self-critique"]
+    H --> I["External Participants:\nendorse / challenge / enhance / new"]
+    H --> K["Primary Driver:\nself-critique"]
 
-    I & J & K --> L[Final Report]
+    I & K --> L[Final Report]
     L --> M{User Choice}
 
     M -- Pick Ideas --> N[Act on Selected]
@@ -117,9 +125,9 @@ graph TD
     M -- Export --> O[Save + Cleanup]
 ```
 
-> **Requires:** Claude (always). Optional: Codex CLI, Gemini CLI
+> **Requires:** primary driver. Optional: Claude/Codex/Gemini reviewer channels
 >
-> **Options:** `model=<sonnet|opus|haiku>` — Claude Task model (default `sonnet`; Codex/Gemini unaffected)
+> **Options:** `effort=<fast|balanced|deep>`, plus Claude `model=<sonnet|opus|haiku>` compatibility
 >
 > **Output:** `{review-dir}/report-{id}.md`
 >
@@ -183,17 +191,17 @@ graph TD
 
 ## `/security-audit` — AI-Driven Security Review
 
-Full-codebase security analysis using multiple AI agents with counter-review. Maps findings to OWASP Top 10.
+Full-codebase security analysis using primary-native analysis, available native subagents, and external reviewer channels with counter-review. Maps findings to OWASP Top 10.
 
 ```mermaid
 graph TD
     A[Preflight + Detect Project Type] --> B[Parallel AI Analysis]
 
-    B --> C[code-reviewer\nInjection, auth, data exposure]
-    B --> D[silent-failure-hunter\nFail-open, swallowed exceptions]
-    B --> E[type-design-analyzer\nType coercion, unsafe casts]
-    B --> F[Claude Native\nOWASP Top 10 mapping]
-    B --> G["Codex CLI (optional)\nComprehensive audit"]
+    B --> C[Native Code/Security Reviewer\nInjection, auth, data exposure]
+    B --> D[Native Silent-Failure Hunter\nFail-open, swallowed exceptions]
+    B --> E[Native Type/Design Analyzer\nType coercion, unsafe casts]
+    B --> F[Primary-Native\nOWASP Top 10 mapping]
+    B --> G["External Reviewers\nClaude / Codex / Gemini"]
 
     C & D & E & F & G --> H[Deduplicate Findings]
     H --> I[Counter-Review]
@@ -205,9 +213,9 @@ graph TD
     L --> M["docs/analysis/security-audit-{id}.md"]
 ```
 
-> **Requires:** git. Optional: Codex CLI
+> **Requires:** git. Optional: Claude/Codex/Gemini reviewer channels
 >
-> **Options:** `model=<sonnet|opus|haiku>` — sub-agent Task model (default `sonnet`)
+> **Options:** `effort=<fast|balanced|deep>`, plus Claude `model=<sonnet|opus|haiku>` compatibility
 >
 > **Output:** `docs/analysis/security-audit-{id}.md`
 >
@@ -250,7 +258,7 @@ Four patterns that appear across multiple skills:
 ```mermaid
 graph LR
     subgraph "Counter-Review"
-        CR1[Agent Finding] --> CR2{Claude Evaluates}
+        CR1[Agent Finding] --> CR2{Primary Driver Evaluates}
         CR2 --> CR3[agree / partial / defer / reject]
     end
 
@@ -274,7 +282,7 @@ graph LR
 
 | Pattern | Used By | Purpose |
 |---------|---------|---------|
-| Counter-review | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Claude critically evaluates findings instead of blindly accepting |
+| Counter-review | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Primary driver critically evaluates findings instead of blindly accepting |
 | Decision gate | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Human-in-the-loop only on disagreements |
 | Convergence loop | `/multi-agent-code-review`, `/multi-agent-plan-review` | Can't exit until fixes are verified clean |
 | State persistence | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | JSON state file survives context window compaction |
