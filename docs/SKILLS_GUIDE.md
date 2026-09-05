@@ -137,31 +137,36 @@ graph TD
 
 ## `/merge` — Squash-Merge with Auto-Documentation
 
-One-command workflow to squash-merge a PR and update all project docs in a single pass.
+One-command workflow to squash-merge a PR and update all project docs in a single pass. Resumable: re-running after a successful merge picks up at the documentation step.
 
 ```mermaid
 graph TD
-    A["Preflight + detect gh or GitHub MCP"] --> B[Squash-Merge PR]
-    B --> C[Switch to Target Branch]
-    C --> D[Pull Latest]
-    D --> E{Docs Need Updating?}
+    A["Preflight: probe capabilities,\nresolve PR (arg or branch)"] --> B{PR state?}
+    B -- MERGED --> C[Switch to Target Branch]
+    B -- OPEN --> M[Squash-Merge]
+    M --> N{GitHub reports merged?}
+    N -- "Queued / auto-merge" --> Z[Stop: resume when merged]
+    N -- Yes --> D[Delete remote branch]
+    D --> C
+    C --> E{Docs Need Updating?}
     E -- Yes --> F["Update README,\nCHANGELOG, CLAUDE.md"]
-    F --> G[Commit + Push]
-    E -- No --> H[Skip]
-    G --> I{Branch present + free?}
+    F --> G{Push accepted?}
+    G -- Protected --> H[Follow-up docs PR]
+    G -- Yes --> I{Branch present + free?}
+    E -- No --> I
     H --> I
-    I -- "Absent / in worktree / shallow" --> K[Keep + record reason]
-    I -- Yes --> J["Compare patch-id:\nbranch diff vs squash diff"]
-    J -- Equal --> L["Delete with -D"]
+    I -- "Absent / protected / unverifiable" --> K[Keep + record reason]
+    I -- Yes --> J["patch-id --verbatim:\nbranch diff vs squash diff"]
+    J -- Equal --> L["Re-check tip, delete with -D"]
     J -- Differ --> K
-    L --> M[Repo-Wide Branch Sweep]
-    K --> M
-    M --> N[Branch Inventory in Summary]
+    L --> O[Repo-Wide Branch Sweep]
+    K --> O
+    O --> P["Report: completed,\noutstanding, branch inventory"]
 ```
 
 > **Requires:** git + (gh or GitHub MCP)
 >
-> **Key features:** Content-proof branch deletion (`git patch-id --stable`, since a squash merge breaks the ancestry that `-d` tests), repo-wide sweep that also catches duplicate-head and no-PR branches, never deletes a branch checked out in a worktree or one it could not verify, prints an inventory of every branch it kept, only updates existing docs (never creates new files), reports merge failures instead of retrying
+> **Key features:** Content-proof branch deletion (`git patch-id --verbatim`, since a squash merge breaks the ancestry that `-d` tests and the default algorithm ignores whitespace), confirms GitHub actually merged rather than queued, repo-wide sweep across local branches, remote branches and stale tracking refs, never deletes a protected or worktree-held branch or one it could not verify, falls back to a follow-up PR when the target rejects direct pushes, reports outstanding work alongside a full branch inventory
 
 ---
 

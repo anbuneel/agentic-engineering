@@ -24,6 +24,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - `/merge` assumed `gh` was installed — GitHub operations now have both a `gh` path and a GitHub MCP path, detected once in preflight, so the skill runs in remote containers that ship without the CLI
 - `/merge` errored when the merged branch was absent from a fresh container clone, and could act on missing history in a shallow clone — absent is now reported as normal, shallow history is deepened before verification, and anything unverifiable is kept
 - `/merge` never reported branches it left behind — Step 7 now ends with an inventory of every remaining local branch and the reason it was kept
+- `/merge` passed `--delete-branch` to `gh pr merge` while claiming it left local branches alone; `gh` documents it as deleting the local branch too, so cleanup could happen before any verification. The flag is gone and remote deletion is explicit
+- `/merge` treated a successful `gh pr merge` as a completed merge — auto-merge and merge queues leave the PR open with no squash commit. The merge is now confirmed against the PR state before anything is verified or documented
+- `/merge` proved branch content with the default `git patch-id`, which strips whitespace and so could not support its "exactly what landed" claim. Deletion evidence is now `--verbatim`; a whitespace-only difference is reported for the user to judge instead of acted on
+- `/merge` required its feature branch to be checked out and refused to run once the PR was merged, so an interrupted run could not be finished. It now accepts `/merge <PR number or URL>`, and an already-merged PR resumes at the documentation step
+- `/merge` pushed docs directly to the target branch, which fails on repositories that require pull requests — a rejected push now becomes a follow-up docs PR, and push failures are classified rather than retried
+- `/merge` inferred every capability from one `gh`-versus-MCP switch. GitHub access, fetch, push, and local checkout are now probed separately, and missing ones are reported as outstanding work
+- `/merge` assumed `origin` held the PR head, which is wrong for fork PRs, and never deleted a branch in a fork. Base and head repositories are now resolved explicitly
+- `/merge` compared no-PR branches by surviving blob hashes alone, missing deletions, renames, and mode changes — it now requires every `--name-status` entry to be accounted for
+- `/merge` swept only local branches and could delete against evidence gathered moments earlier — the sweep now covers remote branches and stale remote-tracking refs, protects integration branches, pages through PR listings, and re-checks each branch tip immediately before deletion
 
 ## [0.7.0] - 2026-03-10
 

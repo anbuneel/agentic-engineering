@@ -154,9 +154,11 @@ Deep security review using the primary driver, available native subagents, and o
 
 Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and evidence-based branch cleanup.
 
-**Evidence-based cleanup:** a squash merge writes a new commit, so the feature branch head never becomes an ancestor of the target — `git branch -d` and `git branch --merged` refuse it every time and local branches pile up. The skill proves the branch content actually landed by comparing `git patch-id --stable` of the branch diff against the squash commit's diff, then sweeps every other local branch: ancestors, branches sharing a head with a merged PR, and branches with no PR at all (settled by per-file blob hashes). Nothing is deleted without content proof or while checked out in a worktree, and Step 7 prints an inventory of every branch it kept and why.
+**Evidence-based cleanup:** a squash merge writes a new commit, so the feature branch head never becomes an ancestor of the target — `git branch -d` and `git branch --merged` refuse it every time and local branches pile up. The skill proves the branch content actually landed by comparing `git patch-id --verbatim` of the branch diff against the squash commit's diff, then sweeps the rest of the repository: local branches (ancestors, branches sharing a head with a merged PR, and no-PR branches settled by per-path blob and mode comparison), remote branches, and stale remote-tracking refs. Nothing is deleted without content proof, and never a protected branch, a branch held by a worktree, or one carrying commits the PR did not have.
 
-Works with or without `gh` — GitHub operations are detected once in preflight and run through either the CLI or GitHub MCP tools, so it runs unchanged in remote containers.
+`--verbatim` matters: the default patch-id algorithm strips whitespace, and whitespace changes behavior in Python, YAML, and Makefiles. A default-algorithm match with a verbatim mismatch is reported as a whitespace-only difference for you to judge, not acted on.
+
+**Resumable and portable.** It takes `/merge <PR number or URL>`, so the feature branch need not be checked out; re-running after a successful merge resumes at the documentation step. It confirms GitHub actually merged rather than queueing the PR behind auto-merge or a merge queue, opens a follow-up docs PR when the target branch rejects direct pushes, and probes GitHub access, fetch, push, and checkout capabilities separately — reporting outstanding work instead of failing when one is missing. Works with or without `gh`, running through GitHub MCP tools in remote containers.
 
 ---
 
