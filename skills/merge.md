@@ -29,7 +29,7 @@ Everything else is a capability, not a prerequisite. Step 1 records what is pres
 
 ## Why the Obvious Approach Fails
 
-Four traps sit in this workflow. Each rule below exists because of one of them; the steps reference these by name rather than re-explaining.
+Four traps sit in this workflow. The steps reference these by name rather than re-explaining.
 
 - **Ancestry cannot prove a squash merge.** A squash merge writes a *new* commit, so the branch head never becomes an ancestor of the target. `git branch -d` and `git branch --merged` both test ancestry, so both refuse every squash-merged branch forever. Deletion must rest on **content proof** instead.
 - **The default patch-id strips whitespace.** Indentation carries meaning in Python, YAML, and Makefiles, so a default-algorithm match does not prove equal content. Evidence is `git patch-id --verbatim`; a default match with a verbatim mismatch is a whitespace-only difference to report, not act on. (`--verbatim` and `--stable` are mutually exclusive.)
@@ -41,6 +41,8 @@ Four traps sit in this workflow. Each rule below exists because of one of them; 
 ## Runtime Adapter
 
 Use the primary driver's native file-read and file-edit capabilities for documentation updates, and standalone shell commands for git operations. Claude Code may use Read/Write/Edit/Bash; Codex may use native file/edit/shell tools. Do not require subagents.
+
+Commands are grouped in blocks for brevity. **Run each line as its own command** — never chain them — and paste literal values from one into the next.
 
 ## Capabilities
 
@@ -81,22 +83,17 @@ Execute the following steps sequentially.
 
 ```bash
 git rev-parse --is-inside-work-tree
-```
-```bash
 git rev-parse --show-toplevel
+gh auth status
 ```
 
 Store the toplevel path as `PROJECT_ROOT`, and again as `WORK_ROOT` — the root every later git command and file edit runs against, which Step 3 may move. **Shell safety rules for the entire skill:**
 
 - **Never use `cd`** — use `git -C` with the resolved root and absolute paths
-- **Never use `$()`** or shell variables. Run each command standalone, read its output, and paste the literal value — SHA, branch name, PR number — into the next command. Names such as `${WORK_ROOT}` are placeholders you substitute yourself
+- **Never use `$()`** or shell variables. Read each command's output and paste the literal value — SHA, branch name, PR number — into the next. Names such as `${WORK_ROOT}` are placeholders you substitute yourself
 - **Never pipe**, except the `git diff ... | git patch-id ...` commands in Steps 6 and 6b. Both sides are git, and the form is identical in bash and PowerShell
 
-```bash
-gh auth status
-```
-
-Succeeds → `GH_MODE = cli`. `gh` missing or unauthenticated, but GitHub MCP tools present → `GH_MODE = mcp`. Neither → stop: "No GitHub access. Run `gh auth login`, or enable the GitHub MCP server."
+`gh auth status` succeeds → `GH_MODE = cli`. `gh` missing or unauthenticated, but GitHub MCP tools present → `GH_MODE = mcp`. Neither → stop: "No GitHub access. Run `gh auth login`, or enable the GitHub MCP server."
 
 **Resolve in this order.** Each stage depends only on the ones before it: probing reachability needs `BASE_REMOTE`, which needs `BASE_REPO`, which needs the PR.
 
@@ -105,37 +102,19 @@ Succeeds → `GH_MODE = cli`. `gh` missing or unauthenticated, but GitHub MCP to
 | Invocation | How `BASE_REPO` is determined |
 |------------|-------------------------------|
 | `/merge <URL>` | Parse `<owner>/<repo>` and the number from the URL — authoritative |
-| `/merge <number>` | A bare number does not name a repository, and the same number is a different PR in a fork. Resolve from the remotes below and state which repository you used |
+| `/merge <number>` | A bare number does not name a repository, and the same number is a different PR in a fork. Resolve from the remotes and state which repository you used |
 | `/merge` | Deferred to 1b, where branch inference resolves repository and PR together |
 
-```bash
-git -C "${PROJECT_ROOT}" remote -v
-```
-
-Parse each remote's URL natively into `<owner>/<repo>`. All remotes pointing at one repository → that is `BASE_REPO`. Several (a fork checkout) → the base is the parent, so confirm rather than guess:
-
-```bash
-gh repo view --repo <candidate> --json isFork,parent
-```
-
-`isFork` false → that candidate is `BASE_REPO`. If every candidate is a fork, use the `parent` of the repository the current branch tracks. Still ambiguous → stop and ask; resolving a bare number against the wrong repository merges an unrelated PR.
+Run `git -C "${PROJECT_ROOT}" remote -v` and parse each URL natively into `<owner>/<repo>`. All remotes pointing at one repository → that is `BASE_REPO`. Several (a fork checkout) → the base is the parent, so confirm rather than guess with `gh repo view --repo <candidate> --json isFork,parent`. `isFork` false → that candidate is `BASE_REPO`. If every candidate is a fork, use the `parent` of the repository the current branch tracks. Still ambiguous → stop and ask; resolving a bare number against the wrong repository merges an unrelated PR.
 
 #### 1b. Pull request
 
-With a number or URL, read the PR with `--repo "${BASE_REPO}"`. With no argument, infer from the current branch:
-
-```bash
-git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD
-```
+With a number or URL, read the PR with `--repo "${BASE_REPO}"`. With no argument, infer from the current branch via `git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD`:
 
 - `HEAD` → detached. Stop: "Detached HEAD — re-run as `/merge <PR number>`."
 - Equals the default branch → stop: "Switch to the feature branch, or re-run as `/merge <PR number>`."
 
-```bash
-gh pr view --json <fields from the GitHub Access table>
-```
-
-This is the only `gh` call that omits `--repo`, because it is how the repository gets discovered here — `gh` rejects the combination with "argument required when using the --repo flag". MCP mode has no branch inference: `list_pull_requests` needs an owner and repo up front, so a no-argument invocation must resolve the repository through 1a first.
+Otherwise run `gh pr view --json <fields from the GitHub Access table>`. This is the only `gh` call that omits `--repo`, because it is how the repository gets discovered here — `gh` rejects the combination with "argument required when using the --repo flag". MCP mode has no branch inference: `list_pull_requests` needs an owner and repo up front, so a no-argument invocation must resolve the repository through 1a first.
 
 Store:
 
@@ -153,49 +132,32 @@ From here on, every `gh` command carries `--repo "${BASE_REPO}"`.
 
 #### 1c. Remotes
 
-Map the resolved repositories back onto remotes:
-
-- `BASE_REMOTE` — matches `BASE_REPO`. Every fetch, pull, and push involving the target branch, and `refs/pull/<N>/head`
-- `HEAD_REMOTE` — matches `HEAD_REPO`. Only to delete the head branch
+Map the resolved repositories back onto remotes: `BASE_REMOTE` matches `BASE_REPO` and carries every fetch, pull, and push involving the target branch plus `refs/pull/<N>/head`; `HEAD_REMOTE` matches `HEAD_REPO` and is used only to delete the head branch.
 
 In a fork checkout `origin` is usually the fork and `upstream` the base, so `BASE_REMOTE` is `upstream` and `HEAD_REMOTE` is `origin`; in a same-repository PR both are `origin`. No remote matches `BASE_REPO` → stop: this clone is not connected to the repository the PR merges into. No remote matches `HEAD_REPO` → `HEAD_REMOTE = none`; the head branch is not deletable from here, which is reported, not worked around.
 
 `isCrossRepository` true is not a reason to refuse cleanup — in your own fork the head branch is yours. The rule is only that deletion goes through `HEAD_REMOTE`, never a remote pointing elsewhere. Verification is unaffected: `refs/pull/<N>/head` is served by `BASE_REPO`.
 
-#### 1d. Capabilities
+#### 1d. Capabilities and local state
 
 ```bash
 git -C "${PROJECT_ROOT}" ls-remote --exit-code "${BASE_REMOTE}" HEAD
-```
-
-Fails → `CAP_FETCH = false`. The merge can still proceed through the API, but no branch may be deleted in Step 6 or 6b.
-
-#### 1e. Local state
-
-```bash
 git -C "${PROJECT_ROOT}" status --porcelain
-```
-
-Non-empty → stop: "Working tree is not clean. Commit or stash changes first." Skip when `CAP_LOCAL` is false.
-
-```bash
 git -C "${PROJECT_ROOT}" worktree list --porcelain
-```
-
-Record every `branch refs/heads/<name>` line as `WORKTREE_BRANCHES`. Step 6 refreshes this; the copy here serves Step 3's checkout decision.
-
-```bash
 git -C "${PROJECT_ROOT}" rev-parse --is-shallow-repository
 ```
 
-`true` → `SHALLOW = true`. Step 6 deepens history before verifying and keeps whatever it cannot verify.
+- `ls-remote` fails → `CAP_FETCH = false`. The merge can still proceed through the API, but no branch may be deleted in Step 6 or 6b
+- `status` non-empty → stop: "Working tree is not clean. Commit or stash changes first." Skip when `CAP_LOCAL` is false
+- Record every `branch refs/heads/<name>` line as `WORKTREE_BRANCHES`. Step 6 refreshes this; the copy here serves Step 3's checkout decision
+- Shallow `true` → `SHALLOW = true`. Step 6 deepens history before verifying and keeps whatever it cannot verify
 
 #### Branch on PR state
 
 This is what makes the skill resumable:
 
-- `OPEN` → check mergeability (`CONFLICTING` → stop: "PR has merge conflicts. Resolve them before merging."), then Step 2.
-- `MERGED` → the merge already happened, here or elsewhere. Skip Step 2, record "merge already complete", continue at Step 3. This is the normal path after an interrupted run.
+- `OPEN` → check mergeability (`CONFLICTING` → stop: "PR has merge conflicts. Resolve them before merging."), then Step 2
+- `MERGED` → the merge already happened, here or elsewhere. Skip Step 2, record "merge already complete", continue at Step 3. This is the normal path after an interrupted run
 - `CLOSED` and not merged → stop: "PR #<number> was closed without merging."
 
 Present the PR number, title, target branch, resolved repositories and remotes, `GH_MODE`, and capabilities, then proceed.
@@ -206,29 +168,24 @@ Present the PR number, title, target branch, resolved repositories and remotes, 
 
 ```bash
 gh pr merge <number> --repo "${BASE_REPO}" --squash
+gh pr view <number> --repo "${BASE_REPO}" --json state,mergeCommit
 ```
 
 Never add `--delete-branch` — it deletes the local branch before verification. In MCP mode, call `merge_pull_request` with `merge_method: "squash"`.
 
-**Confirm the merge happened.** A successful command is not a merged PR:
+The second command confirms the merge, because a successful merge command is not a merged PR:
 
-```bash
-gh pr view <number> --repo "${BASE_REPO}" --json state,mergeCommit
-```
-
-- `MERGED` with a `mergeCommit.oid` → store it as `SQUASH_SHA` and continue.
-- Still `OPEN` → auto-merge or a merge queue took it; no squash commit exists yet. Stop: "PR #<number> is queued for merge, not merged. Re-run `/merge <number>` once GitHub reports it merged — this skill resumes from there." Do NOT continue to Step 3.
+- `MERGED` with a `mergeCommit.oid` → store it as `SQUASH_SHA` and continue
+- Still `OPEN` → auto-merge or a merge queue took it; no squash commit exists yet. Stop: "PR #<number> is queued for merge, not merged. Re-run `/merge <number>` once GitHub reports it merged — this skill resumes from there." Do NOT continue to Step 3
 
 Do not bypass a merge queue on your own initiative. Mention `--admin` only if the user asks, and warn that it bypasses branch protection.
 
-**Delete the remote branch**, but only the commit that was actually merged. Skip entirely when `HEAD_REMOTE` is `none`. Otherwise read the live tip:
+If the merge fails: a **conflict** stops the run with the details reported and no attempt to resolve it; **failing checks** are reported by name with a recommendation to wait; **any other error** is reported verbatim and stops.
 
-```bash
-git -C "${PROJECT_ROOT}" ls-remote "${HEAD_REMOTE}" "refs/heads/<head-branch>"
-```
+**Delete the remote branch**, but only the commit that was actually merged. Skip entirely when `HEAD_REMOTE` is `none`. Otherwise read the live tip with `git -C "${PROJECT_ROOT}" ls-remote "${HEAD_REMOTE}" "refs/heads/<head-branch>"`:
 
-- No output → already gone (the repository auto-deletes merged branches). Continue.
-- Differs from `MERGED_HEAD_SHA` → someone pushed after the merge. **Keep it** and report the new commits as outstanding work.
+- No output → already gone (the repository auto-deletes merged branches). Continue
+- Differs from `MERGED_HEAD_SHA` → someone pushed after the merge. **Keep it** and report the new commits as outstanding work
 - Equals `MERGED_HEAD_SHA` → delete under a lease, so it still fails if the branch moves between check and push:
 
 ```bash
@@ -237,55 +194,30 @@ git -C "${PROJECT_ROOT}" push --force-with-lease="refs/heads/<head-branch>:<merg
 
 git reports a stale lease as `! [rejected] (delete) -> <branch> (stale info)` with a non-zero exit, leaving the branch intact. That is "keep and report", never a reason to retry without the lease. Permission denied → `CAP_PUSH = false`; list the remote branch as outstanding.
 
-If the merge itself fails:
-
-- **Merge conflict** → STOP and report the details. Do NOT resolve conflicts without user input.
-- **CI checks failing** → report which failed and recommend waiting.
-- **Any other error** → report it verbatim and stop.
-
 ---
 
 ### Step 3: Switch to Target Branch
 
 Skip Steps 3-6b when `CAP_LOCAL` is false; report that only the merge was performed.
 
-If `TARGET_BRANCH` is checked out in a **different** worktree, do not check it out here — git will refuse, and forcing it would disturb that worktree. Adopt that worktree instead, re-running the cleanliness check there because Step 1 only vouched for `PROJECT_ROOT`:
-
-```bash
-git -C "<that worktree path>" status --porcelain
-```
-
-- Empty → set `WORK_ROOT` to that path; Steps 3-6b and all documentation edits apply there.
-- Non-empty → committing docs there would sweep up its uncommitted work. Leave it alone, skip to Step 6, and report that documentation needs to run from that worktree once clean.
+If `TARGET_BRANCH` is checked out in a **different** worktree, do not check it out here — git will refuse, and forcing it would disturb that worktree. Adopt that worktree instead, re-running `git -C "<that worktree path>" status --porcelain` because Step 1 only vouched for `PROJECT_ROOT`. Empty → set `WORK_ROOT` to that path; Steps 3-6b and all documentation edits apply there. Non-empty → committing docs there would sweep up its uncommitted work, so leave it alone, skip to Step 6, and report that documentation needs to run from that worktree once clean.
 
 Otherwise `WORK_ROOT` stays `PROJECT_ROOT`:
 
 ```bash
 git -C "${WORK_ROOT}" checkout "${TARGET_BRANCH}"
-```
-
-If the branch does not exist locally — normal in a single-branch or fresh container clone:
-
-```bash
-git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}:refs/remotes/${BASE_REMOTE}/${TARGET_BRANCH}"
-```
-```bash
-git -C "${WORK_ROOT}" checkout -b "${TARGET_BRANCH}" "${BASE_REMOTE}/${TARGET_BRANCH}"
-```
-
-Then update from the base repository:
-
-```bash
 git -C "${WORK_ROOT}" pull --ff-only "${BASE_REMOTE}" "${TARGET_BRANCH}"
-```
-
-`--ff-only` refuses → the local target branch has diverged from the base repository. Stop and report; do not merge or rebase it to force it through.
-
-```bash
 git -C "${WORK_ROOT}" log --oneline -1
 ```
 
-Verify the squash commit is present.
+If the branch does not exist locally — normal in a single-branch or fresh container clone — create it from the base remote first:
+
+```bash
+git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}:refs/remotes/${BASE_REMOTE}/${TARGET_BRANCH}"
+git -C "${WORK_ROOT}" checkout -b "${TARGET_BRANCH}" "${BASE_REMOTE}/${TARGET_BRANCH}"
+```
+
+`--ff-only` refuses → the local target branch has diverged from the base repository. Stop and report; do not merge or rebase it to force it through. The `log` line confirms the squash commit is present.
 
 ---
 
@@ -305,19 +237,13 @@ Read each file before editing. Only update files that exist — do NOT create ne
 
 ### Step 5: Commit and Push Doc Updates
 
-Only if files were actually modified in Step 4. Run each as a separate command:
+Only if files were actually modified in Step 4. If no docs needed updating, skip this step entirely — do NOT create empty commits.
 
 ```bash
 git -C "${WORK_ROOT}" add <specific files changed>
-```
-```bash
 git -C "${WORK_ROOT}" commit -m "docs: update project docs after merging PR #<number>"
-```
-```bash
 git -C "${WORK_ROOT}" push "${BASE_REMOTE}" "HEAD:refs/heads/${TARGET_BRANCH}"
 ```
-
-If no docs needed updating, skip this step entirely. Do NOT create empty commits.
 
 **If the push is rejected**, classify it — do not retry blindly:
 
@@ -327,101 +253,57 @@ If no docs needed updating, skip this step entirely. Do NOT create empty commits
 | Authentication or permission denied | No push credentials here | `CAP_PUSH = false`. Leave the commit locally and report it — do not discard it |
 | Non-fast-forward | The target moved while you worked | `git -C "${WORK_ROOT}" pull --rebase "${BASE_REMOTE}" "${TARGET_BRANCH}"`, then push once more with the same explicit refspec. Still rejected → stop and report |
 
-**Follow-up docs PR** — a normal outcome on repositories that require PRs, not an error:
+**Follow-up docs PR** — a normal outcome on repositories that require PRs, not an error. Push the commit to its own branch and open a PR against `TARGET_BRANCH`:
 
 ```bash
 git -C "${WORK_ROOT}" push "${BASE_REMOTE}" "HEAD:refs/heads/docs/pr-<number>-followup"
 ```
 
-Refused for permission rather than protection → you cannot write to the base repository at all; push to your own fork instead:
-
-```bash
-git -C "${WORK_ROOT}" push "${HEAD_REMOTE}" "HEAD:refs/heads/docs/pr-<number>-followup"
-```
-
-Then `gh pr create --repo "${BASE_REPO}" --base "${TARGET_BRANCH}" --head <owner>:docs/pr-<number>-followup --body-file <file>`, and report its URL. `HEAD_REMOTE = none` too → nowhere to push; report the commit as outstanding and leave it.
+Refused for permission rather than protection → you cannot write to the base repository at all; push to your own fork instead with `git -C "${WORK_ROOT}" push "${HEAD_REMOTE}" "HEAD:refs/heads/docs/pr-<number>-followup"`. Then `gh pr create --repo "${BASE_REPO}" --base "${TARGET_BRANCH}" --head <owner>:docs/pr-<number>-followup --body-file <file>`, and report its URL. `HEAD_REMOTE = none` too → nowhere to push; report the commit as outstanding and leave it.
 
 ---
 
 ### Step 6: Verify and Delete the Merged Branch
 
-Ancestry cannot prove a squash merge, so prove it with content. Substitute every value by hand: run a command, read its output, paste the literal SHA or name into the next.
+Ancestry cannot prove a squash merge, so prove it with content.
 
 #### Stage 1: Preconditions
 
 ```bash
 git -C "${WORK_ROOT}" rev-parse --verify --quiet refs/heads/<head-branch>
-```
-
-- Nothing, non-zero exit → **absent**. Normal after a fresh clone, or if `--delete-branch` on another machine already removed it. Record "absent — nothing to delete" and go to Step 6b. Not an error.
-- A SHA → record it as `BRANCH_HEAD`.
-
-**Refresh the worktree map.** The Step 1 copy is stale — Step 3 switched away from the head branch, so a run that started on the feature branch would otherwise see it as checked out and keep it forever:
-
-```bash
 git -C "${WORK_ROOT}" worktree list --porcelain
 ```
 
-Rebuild `WORKTREE_BRANCHES`. `<head-branch>` in the refreshed set → record "kept — checked out in a worktree" and go to Step 6b, whatever the content evidence says.
+- `rev-parse` prints nothing and exits non-zero → **absent**. Normal after a fresh clone, or if `--delete-branch` on another machine already removed it. Record "absent — nothing to delete" and go to Step 6b. Not an error
+- A SHA → record it as `BRANCH_HEAD`
+- **Rebuild `WORKTREE_BRANCHES` from this fresh listing.** The Step 1 copy is stale — Step 3 switched away from the head branch, so a run that started on the feature branch would otherwise see it as checked out and keep it forever. `<head-branch>` in the refreshed set → "kept — checked out in a worktree", go to Step 6b, whatever the content evidence says
 
-`CAP_FETCH` false → record "kept — unverified (remote unreachable)" and go to Step 6b.
-
-`SHALLOW = true` → deepen first:
-
-```bash
-git -C "${WORK_ROOT}" fetch --deepen 200 "${BASE_REMOTE}"
-```
-
-Fetch fails → "kept — unverified (shallow history)". Never delete on absent evidence.
+`CAP_FETCH` false → "kept — unverified (remote unreachable)". `SHALLOW = true` → deepen with `git -C "${WORK_ROOT}" fetch --deepen 200 "${BASE_REMOTE}"` first, and if that fails, "kept — unverified (shallow history)". Never delete on absent evidence.
 
 #### Stage 2: Gather Evidence
 
-`SQUASH_SHA` comes from Step 2; on a resumed run read it from the PR. If the API returns nothing — it can lag right after a merge — fall back to a message search, since GitHub's default squash subject ends with the PR number:
+`SQUASH_SHA` comes from Step 2; on a resumed run read it from the PR. If the API returns nothing — it can lag right after a merge — fall back to a message search, since GitHub's default squash subject ends with the PR number. Neither source yields a SHA → "kept — unverified (no squash commit found)".
 
 ```bash
 git -C "${WORK_ROOT}" log --fixed-strings --grep "(#<number>)" --max-count 1 --format=%H "${TARGET_BRANCH}"
-```
-
-Neither source yields a SHA → "kept — unverified (no squash commit found)".
-
-```bash
 git -C "${WORK_ROOT}" merge-base --is-ancestor <squash-sha> "${TARGET_BRANCH}"
-```
-
-Exit 0 → present locally. Non-zero → `git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}"` and retry once; still non-zero → "kept — unverified (squash commit not in local history)".
-
-```bash
 git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "refs/pull/<number>/head:refs/prheads/<number>"
-```
-
-Fails → "kept — unverified (PR head unavailable)" and go to Step 6b.
-
-```bash
 git -C "${WORK_ROOT}" rev-parse refs/prheads/<number>
 ```
 
-Record as `PR_HEAD`. **`PR_HEAD` differing from `BRANCH_HEAD` stops the evaluation.** The local branch holds commits the PR never carried, or trails it; either way the merge is not evidence about local content. Record "kept — local branch diverges from the merged PR head" and show it:
+- `--is-ancestor` exit 0 → the squash commit is in local history. Non-zero → `git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}"` and retry once; still non-zero → "kept — unverified (squash commit not in local history)"
+- The fetch fails → "kept — unverified (PR head unavailable)", go to Step 6b
+- Record the PR head as `PR_HEAD`. **`PR_HEAD` differing from `BRANCH_HEAD` stops the evaluation** — the local branch holds commits the PR never carried, or trails it, so the merge is not evidence about local content. Record "kept — local branch diverges from the merged PR head" and show it with `git -C "${WORK_ROOT}" log --oneline refs/prheads/<number>..refs/heads/<head-branch>`
 
-```bash
-git -C "${WORK_ROOT}" log --oneline refs/prheads/<number>..refs/heads/<head-branch>
-```
-
-When the heads match:
+When the heads match, compute the merge base and take both patch ids:
 
 ```bash
 git -C "${WORK_ROOT}" merge-base <branch-head> "${TARGET_BRANCH}"
-```
-
-Record as `MERGE_BASE`, then take both patch ids:
-
-```bash
 git -C "${WORK_ROOT}" diff <merge-base> <branch-head> | git patch-id --verbatim
-```
-```bash
 git -C "${WORK_ROOT}" diff <squash-sha>^ <squash-sha> | git patch-id --verbatim
 ```
 
-Each prints `<patch-id> <commit-id>`. Compare **only the first field** — the second is all zeros for a plain diff and never matches. Both diffs come from the object database, so working-tree line endings do not affect them.
+Each patch-id prints `<patch-id> <commit-id>`. Compare **only the first field** — the second is all zeros for a plain diff and never matches. Both diffs come from the object database, so working-tree line endings do not affect them.
 
 #### Stage 3: Verdict
 
@@ -429,43 +311,23 @@ Each prints `<patch-id> <commit-id>`. Compare **only the first field** — the s
 
 ```bash
 git -C "${WORK_ROOT}" rev-parse refs/heads/<head-branch>
-```
-```bash
 git -C "${WORK_ROOT}" worktree list --porcelain
-```
-
-Tip differs from `BRANCH_HEAD`, or the branch is now checked out → keep and report; never delete on stale evidence. Both clean → delete:
-
-```bash
 git -C "${WORK_ROOT}" branch -D <head-branch>
 ```
 
-Proof, protected-set check, and tip re-check together are what make `-D` safe — never run it without all three. Runtimes preferring an atomic compare-and-delete may use `git -C "${WORK_ROOT}" update-ref -d "refs/heads/<head-branch>" <verified-sha>`, which deletes only if the ref still holds that SHA; it has no checked-out-branch guard, so the worktree check stays mandatory.
+Tip differs from `BRANCH_HEAD`, or the branch is now checked out → keep and report; never delete on stale evidence, and do not run the third command. Proof, protected-set check, and tip re-check together are what make `-D` safe — never run it without all three. Runtimes preferring an atomic compare-and-delete may use `git -C "${WORK_ROOT}" update-ref -d "refs/heads/<head-branch>" <verified-sha>`, which deletes only if the ref still holds that SHA; it has no checked-out-branch guard, so the worktree check stays mandatory.
 
 **Verbatim ids differ** → do not delete. Establish whether the difference is real:
 
 ```bash
 git -C "${WORK_ROOT}" diff <merge-base> <branch-head> | git patch-id --stable
-```
-```bash
 git -C "${WORK_ROOT}" diff <squash-sha>^ <squash-sha> | git patch-id --stable
 ```
 
-- Stable ids match → whitespace-only difference. Report "review before deleting" and leave the decision to the user.
-- Stable ids differ → substantive. Keep and report what is unaccounted for:
+- Stable ids match → whitespace-only difference. Report "review before deleting" and leave the decision to the user
+- Stable ids differ → substantive. Keep, and report what is unaccounted for with `git -C "${WORK_ROOT}" log --oneline "${TARGET_BRANCH}..<head-branch>"` and `git -C "${WORK_ROOT}" diff --stat "${TARGET_BRANCH}...<head-branch>"`
 
-```bash
-git -C "${WORK_ROOT}" log --oneline "${TARGET_BRANCH}..<head-branch>"
-```
-```bash
-git -C "${WORK_ROOT}" diff --stat "${TARGET_BRANCH}...<head-branch>"
-```
-
-Remove the temporary ref either way, including after a failed verification:
-
-```bash
-git -C "${WORK_ROOT}" update-ref -d "refs/prheads/<number>"
-```
+Remove the temporary ref either way, including after a failed verification: `git -C "${WORK_ROOT}" update-ref -d "refs/prheads/<number>"`.
 
 ---
 
@@ -473,27 +335,9 @@ git -C "${WORK_ROOT}" update-ref -d "refs/prheads/<number>"
 
 The PR's own branch is not the only one that goes stale. A branch sharing a head under a different name, or a one-commit branch that never got a PR, is invisible to Step 6. Three kinds of state need separate handling.
 
-#### Stale remote-tracking refs
+**Stale remote-tracking refs** linger after the server-side branch is gone and hold no work. Report what `git -C "${WORK_ROOT}" remote prune --dry-run "${BASE_REMOTE}"` would remove, then run `git -C "${WORK_ROOT}" remote prune "${BASE_REMOTE}"` only with the user's agreement.
 
-They linger after the server-side branch is gone, and hold no work:
-
-```bash
-git -C "${WORK_ROOT}" remote prune --dry-run "${BASE_REMOTE}"
-```
-
-Report what it would remove, then prune only with the user's agreement:
-
-```bash
-git -C "${WORK_ROOT}" remote prune "${BASE_REMOTE}"
-```
-
-#### Local branches
-
-```bash
-git -C "${WORK_ROOT}" for-each-ref --format="%(refname:short) %(objectname)" refs/heads
-```
-
-Two branches printing the same object name are two names for one head: classify the first, apply the same verdict to the other. Build the protected set — never deleted, whatever the content says:
+**Local branches** come from `git -C "${WORK_ROOT}" for-each-ref --format="%(refname:short) %(objectname)" refs/heads`. Two branches printing the same object name are two names for one head: classify the first, apply the same verdict to the other. Build the protected set — never deleted, whatever the content says:
 
 - every branch in the **refreshed** `WORKTREE_BRANCHES` from Step 6, never the Step 1 copy
 - `TARGET_BRANCH` and the default branch
@@ -513,38 +357,16 @@ Two branches printing the same object name are two names for one head: classify 
 
 ```bash
 git -C "${WORK_ROOT}" diff --name-status --find-renames "${TARGET_BRANCH}...<branch>"
-```
-
-Every entry must be accounted for before deletion:
-
-| Status | Accounted for when |
-|--------|--------------------|
-| `A` / `M` | The blob hash matches on the target |
-| `D` | The path is also absent from the target |
-| `R` | The old path is absent and the new path's blob matches |
-| `T` | Both sides report the same mode |
-
-```bash
 git -C "${WORK_ROOT}" ls-tree <branch> -- <path>
-```
-```bash
 git -C "${WORK_ROOT}" ls-tree "${TARGET_BRANCH}" -- <path>
 ```
 
-`ls-tree` prints mode, type, and hash together, so one command per side settles content and mode at once.
+`ls-tree` prints mode, type, and hash together, so one command per side settles content and mode at once. Every entry from `--name-status` must be accounted for before deletion: `A`/`M` when the blob hash matches on the target, `D` when the path is absent from both, `R` when the old path is absent and the new path's blob matches, `T` when both sides report the same mode.
 
-- Every entry accounted for → class (b); the work reached the target under a different commit. Delete with `-D` after the tip re-check.
-- Anything unaccounted for → class (c). Keep, and report every path that did not match. When a path looks superseded rather than lost — the target carries a rewritten or relocated version — say exactly that, name both locations, and let the user decide. Never delete on your own judgment that content "looks superseded".
+- Every entry accounted for → class (b); the work reached the target under a different commit. Delete with `-D` after the tip re-check
+- Anything unaccounted for → class (c). Keep, and report every path that did not match. When a path looks superseded rather than lost — the target carries a rewritten or relocated version — say exactly that, name both locations, and let the user decide. Never delete on your own judgment that content "looks superseded"
 
-#### Remote branches
-
-Local cleanup says nothing about the server. List remote branches with no open PR and **report** them:
-
-```bash
-git -C "${WORK_ROOT}" for-each-ref --format="%(refname:short)" "refs/remotes/${BASE_REMOTE}"
-```
-
-Remote-tracking refs can be stale, so never delete a remote branch on their evidence. Delete only when the user asks, and only the way Step 2 does: read the live tip with `ls-remote`, confirm it against the SHA you verified, and push the deletion under a `--force-with-lease` on that SHA through the remote that owns the branch.
+**Remote branches.** Local cleanup says nothing about the server. List them with `git -C "${WORK_ROOT}" for-each-ref --format="%(refname:short)" "refs/remotes/${BASE_REMOTE}"` and **report** those with no open PR. Remote-tracking refs can be stale, so never delete a remote branch on their evidence: delete only when the user asks, and only the way Step 2 does — read the live tip with `ls-remote`, confirm it against the SHA you verified, and push the deletion under a `--force-with-lease` on that SHA through the remote that owns the branch.
 
 Report each deletion and retention as you go, with the evidence that decided it.
 
@@ -554,12 +376,7 @@ Report each deletion and retention as you go, with the evidence that decided it.
 
 Both halves are required.
 
-**Completed:**
-
-- Which PR was merged (number and title) and the squash commit SHA — or that the merge was already complete when the run started
-- Which docs were updated, or "No doc updates needed" — with the follow-up PR URL if they went there
-- The merged branch's outcome: deleted (with the matching verbatim patch id), absent, or kept with the reason
-- Remote branch and remote-tracking ref outcomes
+**Completed:** which PR was merged (number and title) and the squash commit SHA — or that the merge was already complete when the run started; which docs were updated, or "No doc updates needed", with the follow-up PR URL if they went there; the merged branch's outcome (deleted with the matching verbatim patch id, absent, or kept with the reason); and remote branch and remote-tracking ref outcomes.
 
 **Outstanding:**
 
