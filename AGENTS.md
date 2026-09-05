@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Agentic Engineering — a collection of agent-agnostic workflow skills and sub-agents for AI coding agents. Published at https://github.com/anbuneel/agentic-engineering.
+Agentic Engineering — a collection of agent-agnostic workflow skills and sub-agents for AI coding agents. Published at <https://github.com/anbuneel/agentic-engineering>.
 
 ## Structure
 
@@ -103,4 +103,3 @@ Edit in either location, changes sync instantly. If a link breaks (tool deleted 
 - Codex CLI: use `--json` flag for structured JSONL output when session ID capture is needed — parse `thread_id` from the first line (`{"type":"thread.started","thread_id":"<UUID>"}`)
 - Generate session IDs natively — no Bash calls for setup
 - All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
-
