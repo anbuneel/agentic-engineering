@@ -110,39 +110,51 @@ gh auth status
 
 Store `PROJECT_ROOT` as `WORK_ROOT` — the directory every later git command and file edit runs against. Step 3 may move it.
 
-**Map the remotes.** Every remote operation names a remote explicitly; nothing in this skill assumes `origin` is the right one:
+**Resolve in this order.** Each stage depends only on the ones before it. Probing reachability needs `BASE_REMOTE`, which needs `BASE_REPO`, which needs the repository — so the repository is settled first and capabilities last.
+
+#### 1a. Repository
+
+| Invocation | How `BASE_REPO` is determined |
+|------------|-------------------------------|
+| `/merge <URL>` | Parse `<owner>/<repo>` and the number straight from the URL — authoritative, no inference needed |
+| `/merge <number>` | A bare number does not name a repository, and the same number is a different PR in a fork. Resolve it from the remotes below and state which repository you used |
+| `/merge` | Deferred to 1b, where branch inference resolves repository and PR together |
 
 ```bash
 git -C "${PROJECT_ROOT}" remote -v
 ```
 
-Parse each remote's URL natively into `<owner>/<repo>`. After the PR is resolved below, store:
+Parse each remote's URL natively into `<owner>/<repo>`.
 
-- `BASE_REMOTE` — the remote whose URL matches `BASE_REPO`. Used for every fetch, pull, push to the target branch, and `refs/pull/<N>/head`
-- `HEAD_REMOTE` — the remote whose URL matches `HEAD_REPO`. Used only to delete the head branch
-
-In a fork checkout, `origin` is usually the fork and `upstream` the base repository, so `BASE_REMOTE` is `upstream` and `HEAD_REMOTE` is `origin`. In a same-repository PR both are `origin`. If no remote matches `BASE_REPO`, stop: the local clone is not connected to the repository the PR merges into. If no remote matches `HEAD_REPO`, record `HEAD_REMOTE = none` — the head branch simply is not deletable from here, which is reported, not worked around.
-
-In MCP mode, look the PR up through `origin`'s repository first, then read the PR's own base repository from the response and correct `BASE_REPO` and `BASE_REMOTE` if they differ.
-
-**Probe remote reachability:**
+- All remotes point at one repository → that is `BASE_REPO`.
+- They point at several (a fork checkout) → the base repository is the parent, so confirm it rather than guessing:
 
 ```bash
-git -C "${PROJECT_ROOT}" ls-remote --exit-code "${BASE_REMOTE}" HEAD
+gh repo view --repo <candidate> --json isFork,parent
 ```
 
-Fails → store `CAP_FETCH = false`. The merge can still proceed through the API, but no branch may be deleted in Step 6 or 6b.
+`isFork` false → that candidate is `BASE_REPO`. If every candidate is a fork, use the `parent` of the repository the current branch tracks. If it is still ambiguous, stop and ask which repository the number refers to. Resolving a bare number against the wrong repository merges an unrelated PR.
 
-**Resolve the PR.** If the user supplied a number or URL, use it directly — do not require a local branch. Otherwise:
+#### 1b. Pull request
+
+With a number or URL in hand, read the PR with `--repo "${BASE_REPO}"`.
+
+With no argument, infer from the current branch:
 
 ```bash
 git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD
 ```
 
-- Output is `HEAD` → detached HEAD. There is no branch to resolve a PR from. Stop: "Detached HEAD — re-run as `/merge <PR number>`."
+- Output is `HEAD` → detached HEAD. There is no branch to infer from. Stop: "Detached HEAD — re-run as `/merge <PR number>`."
 - Output equals the default branch → stop: "Switch to the feature branch, or re-run as `/merge <PR number>`."
 
-Read the PR through the GitHub Access table and store:
+```bash
+gh pr view --json <fields from the GitHub Access table>
+```
+
+This is the one `gh` call in the skill that omits `--repo`, because it is how the repository gets discovered in this path — `gh` rejects the combination outright with "argument required when using the --repo flag". In MCP mode there is no branch inference at all: `list_pull_requests` needs an owner and repo up front, so a no-argument invocation must resolve the repository through 1a first.
+
+Store:
 
 | Value | Source | Note |
 |-------|--------|------|
@@ -150,29 +162,34 @@ Read the PR through the GitHub Access table and store:
 | `TARGET_BRANCH` | `baseRefName` | The branch the PR merges into — may differ from the default branch in release/hotfix flows |
 | `HEAD_BRANCH` | `headRefName` | |
 | `HEAD_REPO` | `headRepositoryOwner.login` + `headRepository.name` | For a fork PR this is **not** the base repo. `headRepository.nameWithOwner` comes back empty — compose the two fields |
-| `BASE_REPO` | base repo `nameWithOwner` | Where the PR merges and where `refs/pull/<N>/head` lives |
+| `BASE_REPO` | base repo `nameWithOwner` | Confirms or corrects 1a. The PR's own answer wins |
 | `MERGED_HEAD_SHA` | `headRefOid` | The commit the PR actually merged. Step 2 needs it to delete the head branch safely |
 | `PR_STATE` | `state` | |
 
-Now resolve `BASE_REMOTE` and `HEAD_REMOTE` against these values as described above.
+From here on, pass `--repo "${BASE_REPO}"` to every `gh` command in the skill.
 
-Pass `--repo "${BASE_REPO}"` to **every** `gh` command in this skill, and name `BASE_REMOTE` or `HEAD_REMOTE` in every git command that touches a remote. A bare PR number resolves against whatever repository the current directory happens to point at, which is the wrong one whenever the checkout is a fork.
+#### 1c. Remotes
 
-`isCrossRepository` true means the head branch lives in a different repository from the base. That is not a reason to refuse cleanup — when you are working in your own fork, the head branch is yours and deleting it is correct. The rule is narrower: delete the head branch **only through `HEAD_REMOTE`**, the remote that actually points at the repository holding it. If `HEAD_REMOTE` is `none`, skip the deletion and report it. Never delete a branch through a remote that points somewhere else.
+Map the resolved repositories back onto remotes. Nothing in this skill assumes `origin` is the right one:
+
+- `BASE_REMOTE` — the remote whose URL matches `BASE_REPO`. Used for every fetch, pull, and push involving the target branch, and for `refs/pull/<N>/head`
+- `HEAD_REMOTE` — the remote whose URL matches `HEAD_REPO`. Used only to delete the head branch
+
+In a fork checkout `origin` is usually the fork and `upstream` the base repository, so `BASE_REMOTE` is `upstream` and `HEAD_REMOTE` is `origin`. In a same-repository PR both are `origin`. If no remote matches `BASE_REPO`, stop: this clone is not connected to the repository the PR merges into. If no remote matches `HEAD_REPO`, record `HEAD_REMOTE = none` — the head branch is simply not deletable from here, which is reported rather than worked around.
+
+`isCrossRepository` true means the head branch lives in a different repository from the base. That is not a reason to refuse cleanup — when you are working in your own fork, the head branch is yours and deleting it is correct. The rule is narrower: delete the head branch **only through `HEAD_REMOTE`**. Never delete a branch through a remote that points somewhere else.
 
 Verification is unaffected by forks: `refs/pull/<N>/head` is served by `BASE_REPO`.
 
-**Branch on PR state — this is what makes the skill resumable:**
+#### 1d. Capabilities
 
-- `OPEN` → continue to Step 2.
-- `MERGED` → the merge already happened, on this machine or elsewhere. Skip Step 2 entirely, record "merge already complete", and continue at Step 3 to finish documentation and cleanup. This is the normal path when a previous run was interrupted.
-- `CLOSED` and not merged → stop: "PR #<number> was closed without merging."
+```bash
+git -C "${PROJECT_ROOT}" ls-remote --exit-code "${BASE_REMOTE}" HEAD
+```
 
-For an `OPEN` PR, check mergeability:
+Fails → store `CAP_FETCH = false`. The merge can still proceed through the API, but no branch may be deleted in Step 6 or 6b.
 
-- `mergeable` is `CONFLICTING` → stop: "PR has merge conflicts. Resolve them before merging."
-
-**Working tree state:**
+#### 1e. Local state
 
 ```bash
 git -C "${PROJECT_ROOT}" status --porcelain
@@ -180,15 +197,13 @@ git -C "${PROJECT_ROOT}" status --porcelain
 
 Non-empty → stop: "Working tree is not clean. Commit or stash changes first." Skip this check when `CAP_LOCAL` is false.
 
-**Worktree map** — needed by Steps 3, 6, and 6b:
+Worktree map — needed by Steps 3, 6, and 6b:
 
 ```bash
 git -C "${PROJECT_ROOT}" worktree list --porcelain
 ```
 
-Record every `branch refs/heads/<name>` line as `WORKTREE_BRANCHES`. A branch in this set is never deleted, and the target branch being in it changes Step 3.
-
-**Shallow history:**
+Record every `branch refs/heads/<name>` line as `WORKTREE_BRANCHES`. Step 6 refreshes this map before using it; this copy exists for Step 3's checkout decision.
 
 ```bash
 git -C "${PROJECT_ROOT}" rev-parse --is-shallow-repository
@@ -196,7 +211,15 @@ git -C "${PROJECT_ROOT}" rev-parse --is-shallow-repository
 
 `true` → store `SHALLOW = true`. Step 6 deepens history before verifying and keeps anything it cannot verify.
 
-Present the PR number, title, target branch, `GH_MODE`, and the resolved capabilities to the user, then proceed.
+#### Branch on PR state
+
+This is what makes the skill resumable:
+
+- `OPEN` → check mergeability (`mergeable` is `CONFLICTING` → stop: "PR has merge conflicts. Resolve them before merging."), then continue to Step 2.
+- `MERGED` → the merge already happened, on this machine or elsewhere. Skip Step 2 entirely, record "merge already complete", and continue at Step 3 to finish documentation and cleanup. This is the normal path when a previous run was interrupted.
+- `CLOSED` and not merged → stop: "PR #<number> was closed without merging."
+
+Present the PR number, title, target branch, resolved repositories and remotes, `GH_MODE`, and the capabilities to the user, then proceed.
 
 ---
 
@@ -276,11 +299,13 @@ git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}:refs/remotes/${BA
 git -C "${WORK_ROOT}" checkout -b "${TARGET_BRANCH}" "${BASE_REMOTE}/${TARGET_BRANCH}"
 ```
 
-Then:
+Then update it from the base repository. Name the remote and branch — a bare `git pull` follows whatever the local branch tracks, which in a fork checkout is the fork, not the repository the PR merged into:
 
 ```bash
-git -C "${WORK_ROOT}" pull
+git -C "${WORK_ROOT}" pull --ff-only "${BASE_REMOTE}" "${TARGET_BRANCH}"
 ```
+
+If `--ff-only` refuses, the local target branch has diverged from the base repository. Stop and report — do not merge or rebase the target branch to force it through.
 
 Verify the squash commit is present:
 
@@ -315,8 +340,10 @@ git -C "${WORK_ROOT}" add <specific files changed>
 git -C "${WORK_ROOT}" commit -m "docs: update project docs after merging PR #<number>"
 ```
 ```bash
-git -C "${WORK_ROOT}" push
+git -C "${WORK_ROOT}" push "${BASE_REMOTE}" "HEAD:refs/heads/${TARGET_BRANCH}"
 ```
+
+Name the remote and the destination ref. A bare `git push` follows the branch's tracking configuration, which in a fork checkout sends the base repository's documentation to the fork.
 
 If no docs needed updating, skip this step entirely. Do NOT create empty commits.
 
@@ -324,9 +351,23 @@ If no docs needed updating, skip this step entirely. Do NOT create empty commits
 
 | Rejection | Meaning | Do this |
 |-----------|---------|---------|
-| Protected branch / "changes must be made through a pull request" | The target branch does not accept direct pushes | Push the commit to a new branch (`docs/pr-<number>-followup`) and open a follow-up PR with the same GitHub Access table. Report its URL |
+| Protected branch / "changes must be made through a pull request" | The target branch does not accept direct pushes | Open a follow-up docs PR — see below |
 | Authentication or permission denied | No push credentials in this environment | Record `CAP_PUSH = false`. Leave the commit in place locally and report it as outstanding work — do not discard it |
-| Non-fast-forward | The target moved while you worked | `git -C "${WORK_ROOT}" pull --rebase`, then push once more. Still rejected → stop and report |
+| Non-fast-forward | The target moved while you worked | `git -C "${WORK_ROOT}" pull --rebase "${BASE_REMOTE}" "${TARGET_BRANCH}"`, then push once more with the same explicit refspec. Still rejected → stop and report |
+
+**Follow-up docs PR.** Push the commit to a new branch and open a PR against `TARGET_BRANCH`:
+
+```bash
+git -C "${WORK_ROOT}" push "${BASE_REMOTE}" "HEAD:refs/heads/docs/pr-<number>-followup"
+```
+
+If that push is refused for permission rather than protection, you cannot write to the base repository at all. Push to your own fork instead and open the PR from there:
+
+```bash
+git -C "${WORK_ROOT}" push "${HEAD_REMOTE}" "HEAD:refs/heads/docs/pr-<number>-followup"
+```
+
+Then create the PR with `gh pr create --repo "${BASE_REPO}" --base "${TARGET_BRANCH}" --head <owner>:docs/pr-<number>-followup --body-file <file>`, and report its URL. If `HEAD_REMOTE` is `none` as well, there is nowhere to push — report the commit as outstanding work and leave it.
 
 Repositories that require PRs for every change are common. Treat the follow-up PR as a normal outcome, not an error.
 
@@ -612,6 +653,9 @@ List every branch, including the obviously fine ones. A branch left out of this 
 - Delete `refs/prheads/*` temporary refs after every verification, including failed ones
 - Probe GitHub access, fetch, push, and local-checkout capabilities separately — never infer one from another
 - Resolve repositories once and then actually use them: `--repo "${BASE_REPO}"` on every `gh` command, `BASE_REMOTE` or `HEAD_REMOTE` on every git command that touches a remote. A bare PR number or a hardcoded `origin` resolves against whatever the current directory points at, which is the wrong repository in a fork checkout
+- Never run a bare `git pull`, `git push`, or `git fetch` — they follow the branch's tracking configuration, which in a fork checkout points at the fork. Name the remote and the refspec every time
+- Resolve in dependency order: repository, then PR, then remotes, then capabilities. The reachability probe needs `BASE_REMOTE`, which needs `BASE_REPO`, which needs the PR — probing first makes the order circular
+- A bare PR number does not name a repository. Take it from the URL when given; otherwise resolve the parent repository from the remotes and say which one you used. The same number is a different PR in a fork
 - Delete the head branch only through `HEAD_REMOTE`, the remote that actually holds it. `HEAD_REMOTE = none` means the branch is not deletable from here — report it. Working in your own fork is not a reason to skip cleanup; pointing a deletion at the wrong remote is
 - All of Steps 3-6b run against `WORK_ROOT`, which Step 3 may move to another worktree. Re-check cleanliness wherever it lands — Step 1 only vouched for `PROJECT_ROOT`
 - Re-entry after a successful merge is expected — an already-merged PR resumes at Step 3, it does not stop the skill
