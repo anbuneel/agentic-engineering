@@ -158,7 +158,9 @@ Squash-merges the current PR, switches to the target branch, then auto-updates R
 
 `--verbatim` matters: the default patch-id algorithm strips whitespace, and whitespace changes behavior in Python, YAML, and Makefiles. A default-algorithm match with a verbatim mismatch is reported as a whitespace-only difference for you to judge, not acted on.
 
-**Resumable and portable.** It takes `/merge <PR number or URL>`, so the feature branch need not be checked out; re-running after a successful merge resumes at the documentation step. It confirms GitHub actually merged rather than queueing the PR behind auto-merge or a merge queue, opens a follow-up docs PR when the target branch rejects direct pushes, and probes GitHub access, fetch, push, and checkout capabilities separately — reporting outstanding work instead of failing when one is missing. Works with or without `gh`, running through GitHub MCP tools in remote containers.
+Remote branches get the same treatment: a merged PR proves what the head commit *was*, not where the branch points now, so the live tip is checked and the deletion runs under a `--force-with-lease` — a commit pushed after the merge survives and gets reported.
+
+**Resumable and portable.** It takes `/merge <PR number or URL>`, so the feature branch need not be checked out; re-running after a successful merge resumes at the documentation step. It confirms GitHub actually merged rather than queueing the PR behind auto-merge or a merge queue, opens a follow-up docs PR when the target branch rejects direct pushes, and probes GitHub access, fetch, push, and checkout capabilities separately — reporting outstanding work instead of failing when one is missing. Fork checkouts resolve base and head repositories explicitly rather than assuming `origin`. Works with or without `gh`, running through GitHub MCP tools in remote containers.
 
 ---
 
