@@ -17,6 +17,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Hardened headless Claude reviewer commands with explicit read-only tool grants, edit/write denials, and `PROJECT_ROOT` cwd requirements
 - Replaced Windows hard-link install guidance with symbolic-link guidance for cross-drive development setups
 
+### Fixed
+- `/merge` branch cleanup never worked on a squash merge — `git branch -d` and `git branch --merged` both test ancestry, and a squash merge writes a new commit so the branch head is never an ancestor of the target. Step 6 now proves the branch content landed by comparing `git patch-id --stable` of the branch diff against the squash commit's diff, and deletes with `-D` on that proof
+- `/merge` rule "do NOT force-delete branches" is replaced by "never delete without content proof" — the old rule was what stranded every merged branch
+- `/merge` only ever considered the PR's own branch, so branches sharing a head with a merged PR and branches with no PR accumulated unnoticed — added a repo-wide sweep that classifies every local branch (ancestor, squashed-in, unique content, checked out in a worktree) and settles no-PR branches by per-file blob hashes
+- `/merge` assumed `gh` was installed — GitHub operations now have both a `gh` path and a GitHub MCP path, detected once in preflight, so the skill runs in remote containers that ship without the CLI
+- `/merge` errored when the merged branch was absent from a fresh container clone, and could act on missing history in a shallow clone — absent is now reported as normal, shallow history is deepened before verification, and anything unverifiable is kept
+- `/merge` never reported branches it left behind — Step 7 now ends with an inventory of every remaining local branch and the reason it was kept
+
 ## [0.7.0] - 2026-03-10
 
 ### Changed

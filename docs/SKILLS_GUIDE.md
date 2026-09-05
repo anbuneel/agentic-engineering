@@ -140,21 +140,28 @@ graph TD
 One-command workflow to squash-merge a PR and update all project docs in a single pass.
 
 ```mermaid
-graph LR
-    A[Preflight] --> B[Squash-Merge PR]
+graph TD
+    A["Preflight + detect gh or GitHub MCP"] --> B[Squash-Merge PR]
     B --> C[Switch to Target Branch]
     C --> D[Pull Latest]
     D --> E{Docs Need Updating?}
     E -- Yes --> F["Update README,\nCHANGELOG, CLAUDE.md"]
     F --> G[Commit + Push]
     E -- No --> H[Skip]
-    G --> I[Delete Feature Branch]
+    G --> I{Branch present + free?}
     H --> I
+    I -- "Absent / in worktree / shallow" --> K[Keep + record reason]
+    I -- Yes --> J["Compare patch-id:\nbranch diff vs squash diff"]
+    J -- Equal --> L["Delete with -D"]
+    J -- Differ --> K
+    L --> M[Repo-Wide Branch Sweep]
+    K --> M
+    M --> N[Branch Inventory in Summary]
 ```
 
-> **Requires:** git, gh
+> **Requires:** git + (gh or GitHub MCP)
 >
-> **Key features:** Safe delete only (`-d` not `-D`), only updates existing docs (never creates new files), reports merge failures instead of retrying
+> **Key features:** Content-proof branch deletion (`git patch-id --stable`, since a squash merge breaks the ancestry that `-d` tests), repo-wide sweep that also catches duplicate-head and no-PR branches, never deletes a branch checked out in a worktree or one it could not verify, prints an inventory of every branch it kept, only updates existing docs (never creates new files), reports merge failures instead of retrying
 
 ---
 

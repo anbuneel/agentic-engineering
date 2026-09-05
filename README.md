@@ -26,7 +26,7 @@ You use Claude Code, Codex App, Codex CLI, or another capable coding agent and w
 | `/security-posture` | Yes | Yes | Yes | gh for branch protection |
 | `/security-scan` | Yes | Yes | Yes | Semgrep, Gitleaks, npm audit |
 | `/security-audit` | Yes | Yes | Yes | Claude, Codex, Gemini |
-| `/merge` | Yes | Yes | Yes | gh |
+| `/merge` | Yes | Yes | Yes | gh or GitHub MCP |
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
@@ -150,9 +150,13 @@ Deep security review using the primary driver, available native subagents, and o
 
 ### `/merge` — Squash-Merge with Auto-Documentation
 
-[`skills/merge.md`](skills/merge.md) | Requires: git, gh
+[`skills/merge.md`](skills/merge.md) | Requires: git + (gh or GitHub MCP)
 
-Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and safe branch cleanup.
+Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and evidence-based branch cleanup.
+
+**Evidence-based cleanup:** a squash merge writes a new commit, so the feature branch head never becomes an ancestor of the target — `git branch -d` and `git branch --merged` refuse it every time and local branches pile up. The skill proves the branch content actually landed by comparing `git patch-id --stable` of the branch diff against the squash commit's diff, then sweeps every other local branch: ancestors, branches sharing a head with a merged PR, and branches with no PR at all (settled by per-file blob hashes). Nothing is deleted without content proof or while checked out in a worktree, and Step 7 prints an inventory of every branch it kept and why.
+
+Works with or without `gh` — GitHub operations are detected once in preflight and run through either the CLI or GitHub MCP tools, so it runs unchanged in remote containers.
 
 ---
 
@@ -324,7 +328,7 @@ These are markdown files — any AI agent that can read instructions, inspect/ed
 
 | Tool | Install | Used by |
 |------|---------|---------|
-| [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/multi-agent-code-review`, `/merge`, `/security-posture` (optional) |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/multi-agent-code-review`, `/merge` (gh or GitHub MCP), `/security-posture` (optional) |
 | [Claude Code](https://claude.ai/code) | Follow Claude Code docs | Primary driver or external reviewer channel |
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | Primary driver or external reviewer channel |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` | Multi-agent workflows (optional) |
@@ -400,6 +404,7 @@ When Codex is primary, external reviewer subprocesses (`claude`, `gemini`, and o
 |---|---|---|
 | `Bash(git *)` | All skills | Branch operations, commits, push, diff |
 | `Bash(gh *)` | `/multi-agent-code-review`, `/merge`, `/security-posture` | PR creation, bot review polling, issue creation |
+| GitHub MCP tools | `/merge` | Fallback for `gh` in remote containers that ship without the CLI |
 | `Bash(claude *)` | multi-agent workflows when Codex is primary | Claude reviewer channel |
 | `Bash(codex *)` | multi-agent workflows when Codex is external or secondary | Codex CLI exec and resume commands |
 | `Bash(gemini *)` | `/multi-agent-ideate` | Gemini CLI non-interactive prompts |
