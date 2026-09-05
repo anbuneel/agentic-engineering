@@ -27,6 +27,21 @@ Requires **git**. At least one of these scanning tools must be installed:
 
 ---
 
+## Runtime Adapter
+
+This skill is driver-neutral. The **primary driver** is whichever agent is executing it: Claude Code, Codex App, or Codex CLI.
+
+Use the primary driver's native capabilities for:
+
+- reading project files
+- writing report and temporary JSON artifacts
+- searching files
+- running standalone shell commands
+
+Do not rely on driver-specific tool names in execution. Claude Code may use Read/Write/Glob/Grep/Bash; Codex may use native file/search/shell tools.
+
+---
+
 ## Agent Instructions
 
 When invoked, execute the following phases sequentially.
@@ -57,7 +72,7 @@ Generate a random 8-character hex string natively (not Bash). Store as `SCAN_ID`
 
 ### Step 1c: Set Up Review Directory
 
-Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the Write tool writes the first file into it — do NOT use `mkdir`.
+Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the primary driver's file-write capability writes the first file into it — do NOT use `mkdir`.
 
 ### Step 1d: Detect Available Tools
 
@@ -73,7 +88,7 @@ gitleaks version
 
 Set flags based on which commands succeed (exit code 0) vs fail (command not found).
 
-Check if `package.json` exists in the project root (use Read tool, not Bash).
+Check if `package.json` exists in the project root using the primary driver's file-read capability, not Bash.
 
 Track availability:
 - `HAS_SEMGREP`: true/false based on command success
@@ -106,7 +121,7 @@ semgrep scan --config auto --json --output "${REVIEW_DIR}/semgrep-${SCAN_ID}.jso
 
 Note: Semgrep may return exit code 1 if it finds issues — this is expected, not an error. Only treat non-zero exit as failure if stderr indicates an actual error (e.g., config not found, crash).
 
-Parse JSON output natively (Read the output file, parse in-context — no `jq`, no `$()`).
+Parse JSON output natively using the primary driver's file-read capability — no `jq`, no `$()`.
 
 Extract from each result:
 - Rule ID (`check_id`)
@@ -127,7 +142,7 @@ npm audit --json --prefix "${PROJECT_ROOT}"
 
 Note: `npm audit` returns exit code 1 when vulnerabilities are found — this is expected. Only treat as failure if the output is not parseable JSON.
 
-Capture stdout natively from the Bash tool result. Write it to `${REVIEW_DIR}/npm-audit-${SCAN_ID}.json` using the Write tool. Parse in-context.
+Capture stdout natively from the shell result. Write it to `${REVIEW_DIR}/npm-audit-${SCAN_ID}.json` using the primary driver's file-write capability. Parse in-context.
 
 Extract from each vulnerability:
 - Package name
@@ -147,7 +162,7 @@ gitleaks detect --source "${PROJECT_ROOT}" --report-format json --report-path "$
 
 Note: Gitleaks returns exit code 1 when leaks are found — this is expected.
 
-Parse JSON output natively (Read the output file, parse in-context).
+Parse JSON output natively using the primary driver's file-read capability.
 
 Extract from each finding:
 - Rule description (`Description`)
@@ -163,7 +178,7 @@ Store findings as `GITLEAKS_FINDINGS` with count.
 
 ## Phase 3: Artifact Generation
 
-Create the directory `docs/analysis/` if it doesn't exist (use Write tool — writing the file auto-creates parent dirs).
+Create the directory `docs/analysis/` if it doesn't exist using the primary driver's file-write capability.
 
 Write the report to `${PROJECT_ROOT}/docs/analysis/security-scan-${SCAN_ID}.md`:
 
@@ -247,7 +262,7 @@ Present to the user:
 
 ## Rules
 
-- `.review/` for temp files — auto-create via Write tool, add to `.gitignore` if missing
+- `.review/` for temp files — auto-create via the primary driver's file-write capability, add to `.gitignore` if missing
 - Parse all JSON natively — no `jq`, no `$()`, no pipes for JSON processing
 - **Never use `cd`** — use absolute paths everywhere
 - **Secret values NEVER written** to the artifact or presented to the user — redact always, only show type and location

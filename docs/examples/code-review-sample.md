@@ -8,9 +8,33 @@
 |-------|-------|
 | Review ID | `a3f7c921` |
 | Date | 2025-02-25 |
+| Primary Driver | Codex App |
 | PR | #42 — Add user authentication middleware |
 | Rounds | 3 |
 | Status | Converged |
+| Required Reviewers | None (all external reviewers advisory) |
+
+## External Thread IDs
+
+| Reviewer | Session |
+|----------|---------|
+| claude-reviewer | `externalThreadIds.claude = 7f2a...` |
+| codex-cli | `externalThreadIds.codex = 019a...` |
+
+## Reviewer Registry
+
+| Reviewer | Kind | Status | Independence |
+|----------|------|--------|--------------|
+| primary-native | Primary driver | Ran | native |
+| native-code-reviewer | Native subagent | Ran | native |
+| native-silent-failure-hunter | Native subagent | Ran | native |
+| native-type-design-analyzer | Native subagent | Ran | native |
+| claude-reviewer | External reviewer | Ran | independent |
+| codex-cli | External reviewer | Ran | secondary same-family |
+| gemini-cli | External reviewer | Skipped - not configured | independent |
+| gh:claude-bot | GitHub review agent | Ran | independent |
+| gh:devin | GitHub review agent | Ran | independent |
+| gh:codex | GitHub review agent | Ran | independent |
 
 ## Summary Metrics
 
@@ -24,16 +48,16 @@
 
 ---
 
-## Pre-Review (Claude agents)
+## Pre-Review (Primary Driver + Native Subagents)
 
 ### Findings
 
 | # | Agent | Finding | Severity | File |
 |---|-------|---------|----------|------|
-| 1 | code-reviewer | JWT secret loaded from env without fallback — app crashes if `JWT_SECRET` is unset | MUST FIX | src/auth/jwt.ts:14 |
-| 2 | code-reviewer | `verifyToken` catches all errors and returns `null` — masks malformed token errors | SHOULD FIX | src/auth/jwt.ts:28 |
-| 3 | silent-failure-hunter | Login endpoint returns 200 with empty body on DB connection failure | MUST FIX | src/routes/login.ts:45 |
-| 4 | type-design-analyzer | `UserSession` type allows `expiresAt: any` — should be `Date` or `number` | SHOULD FIX | src/types/auth.ts:8 |
+| 1 | native-code-reviewer | JWT secret loaded from env without fallback — app crashes if `JWT_SECRET` is unset | MUST FIX | src/auth/jwt.ts:14 |
+| 2 | native-code-reviewer | `verifyToken` catches all errors and returns `null` — masks malformed token errors | SHOULD FIX | src/auth/jwt.ts:28 |
+| 3 | native-silent-failure-hunter | Login endpoint returns 200 with empty body on DB connection failure | MUST FIX | src/routes/login.ts:45 |
+| 4 | native-type-design-analyzer | `UserSession` type allows `expiresAt: any` — should be `Date` or `number` | SHOULD FIX | src/types/auth.ts:8 |
 
 ### Counter-Review
 
@@ -50,7 +74,7 @@ All pre-review findings applied. Committed: `fix: pre-review findings`.
 
 ## Round 1
 
-### Remote Agent Comments
+### GitHub Review Agent Comments
 
 | Source | Finding | Severity |
 |--------|---------|----------|
@@ -58,14 +82,14 @@ All pre-review findings applied. Committed: `fix: pre-review findings`.
 | Devin | Auth middleware doesn't handle expired refresh tokens gracefully | SHOULD FIX |
 | Codex GH | Consider adding request ID to auth error logs for traceability | CONSIDER |
 
-### Codex CLI Review
+### External Reviewer Feedback
 
-| # | Finding | Severity |
-|---|---------|----------|
-| 5 | No rate limiting on `/login` — brute force risk | MUST FIX |
-| 6 | Password comparison uses `===` instead of constant-time comparison — timing attack risk | MUST FIX |
-| 7 | Refresh token rotation not implemented — stolen tokens valid indefinitely | SHOULD FIX |
-| 8 | Auth error messages leak whether email exists ("user not found" vs "wrong password") | SHOULD FIX |
+| # | Source | Finding | Severity |
+|---|--------|---------|----------|
+| 5 | codex-cli | No rate limiting on `/login` — brute force risk | MUST FIX |
+| 6 | claude-reviewer | Password comparison uses `===` instead of constant-time comparison — timing attack risk | MUST FIX |
+| 7 | codex-cli | Refresh token rotation not implemented — stolen tokens valid indefinitely | SHOULD FIX |
+| 8 | claude-reviewer | Auth error messages leak whether email exists ("user not found" vs "wrong password") | SHOULD FIX |
 
 **VERDICT: REVISE**
 
@@ -73,17 +97,17 @@ All pre-review findings applied. Committed: `fix: pre-review findings`.
 
 | # | Agent | Finding | Severity | Disposition | Rationale |
 |---|-------|---------|----------|-------------|-----------|
-| 5 | codex | Rate limiting on /login | MUST FIX | agree | Duplicate of Claude bot finding, confirmed critical |
-| 6 | codex | Timing attack on password compare | MUST FIX | agree | Real vulnerability, use crypto.timingSafeEqual |
-| 7 | codex | Refresh token rotation | SHOULD FIX | defer | Valid but requires schema migration, out of scope for this PR |
-| 8 | codex | Error message leaks email existence | SHOULD FIX | reject | Intentional UX decision — login form shows inline field errors |
+| 5 | codex-cli | Rate limiting on /login | MUST FIX | agree | Duplicate of Claude bot finding, confirmed critical |
+| 6 | claude-reviewer | Timing attack on password compare | MUST FIX | agree | Real vulnerability, use crypto.timingSafeEqual |
+| 7 | codex-cli | Refresh token rotation | SHOULD FIX | defer | Valid but requires schema migration, out of scope for this PR |
+| 8 | claude-reviewer | Error message leaks email existence | SHOULD FIX | reject | Intentional UX decision — login form shows inline field errors |
 
 ### Decision Gate — Round 1
 
-**Finding #7 (defer):** Codex recommends refresh token rotation. Claude defers — requires DB schema change.
+**Finding #7 (defer):** Codex recommends refresh token rotation. The primary driver defers — requires DB schema change.
 > **User decision:** Confirmed defer. Will address in follow-up PR #44.
 
-**Finding #8 (reject):** Codex flags email existence leak. Claude rejects — intentional design.
+**Finding #8 (reject):** Claude reviewer flags email existence leak. The primary driver rejects — intentional design.
 > **User decision:** Confirmed reject. Error messages are an intentional UX choice for this app.
 
 ### Fixes Applied
@@ -97,12 +121,12 @@ Committed: `fix: round 1 must-fix findings`
 
 ## Round 2
 
-### Codex CLI Review
+### External Reviewer Feedback
 
-| # | Finding | Severity |
-|---|---------|----------|
-| 9 | Rate limit config should be environment-variable driven, not hardcoded | SHOULD FIX |
-| 10 | Missing test for rate limiting behavior | SHOULD FIX |
+| # | Source | Finding | Severity |
+|---|--------|---------|----------|
+| 9 | codex-cli | Rate limit config should be environment-variable driven, not hardcoded | SHOULD FIX |
+| 10 | claude-reviewer | Missing test for rate limiting behavior | SHOULD FIX |
 
 **VERDICT: REVISE**
 
@@ -110,8 +134,8 @@ Committed: `fix: round 1 must-fix findings`
 
 | # | Agent | Finding | Severity | Disposition | Rationale |
 |---|-------|---------|----------|-------------|-----------|
-| 9 | codex | Rate limit env config | SHOULD FIX | agree | Good practice, easy to add |
-| 10 | codex | Rate limit test missing | SHOULD FIX | agree | Should verify the 429 response |
+| 9 | codex-cli | Rate limit env config | SHOULD FIX | agree | Good practice, easy to add |
+| 10 | claude-reviewer | Rate limit test missing | SHOULD FIX | agree | Should verify the 429 response |
 
 ### Fixes Applied
 
@@ -124,13 +148,20 @@ Committed: `fix: round 2 should-fix findings`
 
 ## Round 3 (Verification)
 
-### Codex CLI Review
+### External Reviewer Feedback
 
 No new findings.
 
 **VERDICT: APPROVED**
 
 Converged after 3 rounds — all MUST FIX resolved, fixes verified, no new issues.
+
+## Confidence Notes
+
+- GitHub review agents were polled in every round and pending GH findings were verified by fingerprint.
+- Claude reviewer channel was available under Codex primary, preserving cross-model review; its `session_id` was captured and resumed across rounds.
+- Codex CLI feedback was useful but labeled secondary same-family because Codex App was the primary driver.
+- Gemini was skipped because it was not configured for this run.
 
 ---
 

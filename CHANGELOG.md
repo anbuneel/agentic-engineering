@@ -7,6 +7,38 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Added
 - `tools/codex-setup-sync/` — Windows-first PowerShell tool for syncing portable Codex setup across machines through a private git repo
 - Config rendering, machine-local overlays, optional session export/import, wrapper generation, and Pester coverage for `codex-setup-sync`
+- Agent-agnostic reviewer registry model for shipped skills, covering primary driver, native subagents, external CLI reviewers, common GitHub review agents, skipped reviewers, and reviewer independence notes
+- `scripts/install-skill-links.ps1` for symlinking shipped skills into Claude Code, Codex `$CODEX_HOME/skills`, or shared `~/.agents/skills`
+
+### Changed
+- Reframed shipped skills and docs from Claude-first workflows to Claude/Codex-compatible primary-driver workflows
+- Updated multi-agent review, plan review, ideation, and security audit flows to support dynamic reviewer discovery and degraded-mode artifacts
+- Tightened reviewer contracts with concrete Claude CLI invocation/resume semantics, advisory-vs-required reviewer rules, Codex sandbox prerequisites, and same-family reviewer labeling
+- Hardened headless Claude reviewer commands with explicit read-only tool grants, edit/write denials, and `PROJECT_ROOT` cwd requirements
+- Replaced Windows hard-link install guidance with symbolic-link guidance for cross-drive development setups
+
+### Fixed
+- `/merge` branch cleanup never worked on a squash merge — `git branch -d` and `git branch --merged` both test ancestry, and a squash merge writes a new commit so the branch head is never an ancestor of the target. Step 6 now proves the branch content landed by comparing `git patch-id --stable` of the branch diff against the squash commit's diff, and deletes with `-D` on that proof
+- `/merge` rule "do NOT force-delete branches" is replaced by "never delete without content proof" — the old rule was what stranded every merged branch
+- `/merge` only ever considered the PR's own branch, so branches sharing a head with a merged PR and branches with no PR accumulated unnoticed — added a repo-wide sweep that classifies every local branch (ancestor, squashed-in, unique content, checked out in a worktree) and settles no-PR branches by per-file blob hashes
+- `/merge` assumed `gh` was installed — GitHub operations now have both a `gh` path and a GitHub MCP path, detected once in preflight, so the skill runs in remote containers that ship without the CLI
+- `/merge` errored when the merged branch was absent from a fresh container clone, and could act on missing history in a shallow clone — absent is now reported as normal, shallow history is deepened before verification, and anything unverifiable is kept
+- `/merge` never reported branches it left behind — Step 7 now ends with an inventory of every remaining local branch and the reason it was kept
+- `/merge` passed `--delete-branch` to `gh pr merge` while claiming it left local branches alone; `gh` documents it as deleting the local branch too, so cleanup could happen before any verification. The flag is gone and remote deletion is explicit
+- `/merge` treated a successful `gh pr merge` as a completed merge — auto-merge and merge queues leave the PR open with no squash commit. The merge is now confirmed against the PR state before anything is verified or documented
+- `/merge` proved branch content with the default `git patch-id`, which strips whitespace and so could not support its "exactly what landed" claim. Deletion evidence is now `--verbatim`; a whitespace-only difference is reported for the user to judge instead of acted on
+- `/merge` required its feature branch to be checked out and refused to run once the PR was merged, so an interrupted run could not be finished. It now accepts `/merge <PR number or URL>`, and an already-merged PR resumes at the documentation step
+- `/merge` pushed docs directly to the target branch, which fails on repositories that require pull requests — a rejected push now becomes a follow-up docs PR, and push failures are classified rather than retried
+- `/merge` inferred every capability from one `gh`-versus-MCP switch. GitHub access, fetch, push, and local checkout are now probed separately, and missing ones are reported as outstanding work
+- `/merge` assumed `origin` held the PR head, which is wrong for fork PRs, and never deleted a branch in a fork. Base and head repositories are now resolved explicitly
+- `/merge` compared no-PR branches by surviving blob hashes alone, missing deletions, renames, and mode changes — it now requires every `--name-status` entry to be accounted for
+- `/merge` deleted the remote head branch on the strength of the merge alone, destroying any commit pushed to it after the merge — the live tip is now checked against the merged head SHA and the deletion runs under a `--force-with-lease` on that SHA
+- `/merge` recorded the resolved base and head repositories but kept using bare PR numbers and a hardcoded `origin`, which targets the wrong repository in a fork checkout — `--repo` is now passed to every `gh` call and every git remote operation names `BASE_REMOTE` or `HEAD_REMOTE`. The blanket "never delete a fork branch" rule, which contradicted the fork-checkout case, is replaced by "delete the head branch only through the remote that holds it"
+- `/merge` still pulled and pushed documentation through bare `git pull`/`git push`, which follow the branch's tracking configuration and so target the fork in a fork checkout — every pull, push, and fetch now names its remote and refspec, including the follow-up docs PR, which falls back to pushing the branch to the fork when the base repository refuses it
+- `/merge` preflight was circular: it probed reachability with `BASE_REMOTE` before resolving it, while the PR lookup needed a `BASE_REPO` that was not yet known, and the MCP path resolved a bare PR number against `origin` where the same number is a different PR. Step 1 now resolves repository, then PR, then remotes, then capabilities, and a bare number that cannot be attributed to one repository stops for confirmation
+- `/merge` reused the worktree map captured before Step 3 switched branches, so a run started on the feature branch classified it as checked out and never deleted it — reintroducing the very defect this release fixes. The map is refreshed after the checkout and again immediately before deletion
+- `/merge` could adopt another worktree to hold the target branch without checking that worktree was clean, sweeping unrelated edits into the docs commit — every step from Step 3 on now runs against an explicit `WORK_ROOT` whose cleanliness is verified where it actually lands
+- `/merge` swept only local branches and could delete against evidence gathered moments earlier — the sweep now covers remote branches and stale remote-tracking refs, protects integration branches, pages through PR listings, and re-checks each branch tip immediately before deletion
 
 ## [0.7.0] - 2026-03-10
 

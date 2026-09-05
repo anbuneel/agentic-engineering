@@ -23,6 +23,14 @@ Requires **git**. Optional: [GitHub CLI (`gh`)](https://cli.github.com/) for bra
 
 ---
 
+## Runtime Adapter
+
+This skill is driver-neutral. The **primary driver** is whichever agent is executing it: Claude Code, Codex App, or Codex CLI.
+
+Use the primary driver's native capabilities for file reads, glob/search operations, report writing, and standalone shell commands. Claude Code may use Read/Glob/Grep/Bash; Codex may use native file/search/shell tools. Do not require any driver-specific subagent feature.
+
+---
+
 ## Agent Instructions
 
 When invoked, execute the following phases sequentially.
@@ -64,7 +72,7 @@ Scan the project root for indicators. Set flags:
 | `Dockerfile` | `HAS_DOCKER` |
 | `*.html`, `next.config.*`, `vite.config.*`, `angular.json` | `IS_WEB` |
 
-Use Read/Glob tools to check — not Bash.
+Use the primary driver's file-read and glob/search capabilities to check — not Bash.
 
 ### Step 1d: Detect GitHub CLI
 
@@ -86,7 +94,7 @@ Run all 16 checks sequentially. For each, record: check number, category, name, 
 
 #### Check 1.1: Gitignore Covers Secrets
 
-Read `.gitignore` in the project root using the Read tool.
+Read `.gitignore` in the project root using the primary driver's file-read capability.
 
 - **PASS**: `.gitignore` exists AND contains patterns for at least 3 of: `.env`, `*.key`, `*.pem`, `credentials`, `*.secret`, `.env.*`, `*.p12`, `*.pfx`
 - **FAIL**: `.gitignore` missing or doesn't cover secrets
@@ -104,7 +112,7 @@ git log --all --diff-filter=A --name-only --pretty=format: -- "*.env" ".env" ".e
 
 #### Check 1.3: Pre-commit Secret Detection Hook
 
-Check for pre-commit hooks that include secret detection. Use Glob and Read:
+Check for pre-commit hooks that include secret detection. Use the primary driver's glob/search and file-read capabilities:
 
 1. Check `.pre-commit-config.yaml` for `detect-secrets`, `gitleaks`, or `trufflehog`
 2. Check `.husky/pre-commit` for secret scanning commands
@@ -121,7 +129,7 @@ Check for pre-commit hooks that include secret detection. Use Glob and Read:
 
 #### Check 2.1: Lock File Exists
 
-Use Glob to check for any of: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lockb`, `Cargo.lock`, `go.sum`, `poetry.lock`, `Pipfile.lock`, `Gemfile.lock`, `composer.lock`
+Use the primary driver's glob/search capability to check for any of: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lockb`, `Cargo.lock`, `go.sum`, `poetry.lock`, `Pipfile.lock`, `Gemfile.lock`, `composer.lock`
 
 - **PASS**: At least one lock file found
 - **FAIL**: No lock file found
@@ -130,7 +138,7 @@ Use Glob to check for any of: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`
 
 #### Check 2.2: Automated Dependency Updates
 
-Use Glob to check for any of:
+Use the primary driver's glob/search capability to check for any of:
 - `.github/dependabot.yml` or `.github/dependabot.yaml`
 - `renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`
 
@@ -144,7 +152,7 @@ Use Glob to check for any of:
 
 #### Check 3.1: CI Configuration Exists
 
-Use Glob to check for any of: `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.gitlab-ci.yml`, `.circleci/config.yml`, `Jenkinsfile`, `.travis.yml`, `azure-pipelines.yml`, `bitbucket-pipelines.yml`
+Use the primary driver's glob/search capability to check for any of: `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.gitlab-ci.yml`, `.circleci/config.yml`, `Jenkinsfile`, `.travis.yml`, `azure-pipelines.yml`, `bitbucket-pipelines.yml`
 
 - **PASS**: CI config found
 - **FAIL**: No CI configuration detected
@@ -189,7 +197,7 @@ Parse JSON natively — do NOT use `--jq`.
 
 #### Check 4.1: SECURITY.md Exists
 
-Use Glob: `**/SECURITY.md` (case-insensitive check — also try `security.md`)
+Use the primary driver's glob/search capability: `**/SECURITY.md` (case-insensitive check — also try `security.md`)
 
 - **PASS**: `SECURITY.md` found
 - **FAIL**: No security policy document
@@ -218,7 +226,7 @@ Check based on project type:
 - **Go**: `gosec` in CI or Makefile
 - **Rust**: `cargo-audit` in CI or config
 
-Use Read/Glob to check these files.
+Use the primary driver's file-read and glob/search capabilities to check these files.
 
 - **PASS**: Security linting tool configured for the project type
 - **FAIL**: No security linting configured
@@ -239,7 +247,7 @@ Read `tsconfig.json`. Check for `"strict": true`.
 
 **N/A if `IS_WEB` is false.**
 
-Search for Content Security Policy configuration. Use Grep to search for `content-security-policy`, `CSP`, `helmet` (Node), `csp` in config files, middleware, and HTML meta tags.
+Search for Content Security Policy configuration. Use the primary driver's search capability to search for `content-security-policy`, `CSP`, `helmet` (Node), `csp` in config files, middleware, and HTML meta tags.
 
 - **PASS**: CSP configuration found
 - **FAIL**: No CSP headers detected
@@ -251,7 +259,7 @@ Search for Content Security Policy configuration. Use Grep to search for `conten
 
 **All checks N/A if `HAS_DOCKER` is false.**
 
-Read all Dockerfiles found via Glob: `**/Dockerfile*`
+Read all Dockerfiles found via the primary driver's glob/search capability: `**/Dockerfile*`
 
 #### Check 6.1: Non-Root User
 
@@ -299,7 +307,7 @@ Calculate the score:
 
 ## Phase 4: Artifact Generation
 
-Create the directory `docs/analysis/` if it doesn't exist (use Write tool — writing the file auto-creates parent dirs).
+Create the directory `docs/analysis/` if it doesn't exist using the primary driver's file-write capability.
 
 Write the report to `${PROJECT_ROOT}/docs/analysis/security-posture-${SCAN_ID}.md`:
 
@@ -403,7 +411,7 @@ Present to the user:
 
 - **Read-only analysis** — do NOT modify any source code or configuration
 - **Never use `cd`** — use absolute paths everywhere
-- Use Read/Glob tools for file checks — not Bash (except for git/gh commands)
+- Use the primary driver's file-read and glob/search capabilities for file checks — not Bash (except for git/gh commands)
 - Quote all bash variables: `"${VAR}"`
 - Run each Bash command as a standalone call — never chain with `&&` or `$()`
 - **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
