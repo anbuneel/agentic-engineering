@@ -152,6 +152,30 @@ git -C "${PROJECT_ROOT}" rev-parse --is-shallow-repository
 - Record every `branch refs/heads/<name>` line as `WORKTREE_BRANCHES`. Step 6 refreshes this; the copy here serves Step 3's checkout decision
 - Shallow `true` → `SHALLOW = true`. Step 6 deepens history before verifying and keeps whatever it cannot verify
 
+#### 1e. Target branch sync
+
+A stale local target branch is not a cosmetic problem: **GitHub diffs a PR from its merge-base with the base branch, not from the commit you branched at.** If the local target branch has unpushed commits and the PR was branched from it, those commits are inside the PR's diff and get folded into the squash under this PR's title, silently. Detect that here, while the merge is still preventable.
+
+```bash
+git -C "${PROJECT_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}:refs/remotes/${BASE_REMOTE}/${TARGET_BRANCH}"
+git -C "${PROJECT_ROOT}" rev-list --left-right --count "refs/heads/${TARGET_BRANCH}...refs/remotes/${BASE_REMOTE}/${TARGET_BRANCH}"
+```
+
+`rev-list` prints `<ahead> <behind>` — commits the local branch has that the remote lacks, then the reverse. The local branch not existing (fresh or single-branch clone) makes this a no-op; there is nothing to compare.
+
+- `0 0` → in sync. Continue
+- `0 N`, behind only → stale but holds nothing unique. Note it; Step 3 fast-forwards
+- ahead > 0 → list the unpushed commits and test each against the PR head:
+
+```bash
+git -C "${PROJECT_ROOT}" log --oneline "refs/remotes/${BASE_REMOTE}/${TARGET_BRANCH}..refs/heads/${TARGET_BRANCH}"
+git -C "${PROJECT_ROOT}" merge-base --is-ancestor <local-only-sha> <pr-head>
+```
+
+Exit 0 → that commit is an ancestor of the PR head, so it is in the PR and will be squashed into it. Use `MERGED_HEAD_SHA` as `<pr-head>` when it exists locally; when it does not, assume every local-only commit is absorbed — that is the safe direction.
+
+Any absorbed commit → **stop before merging**: "Local `${TARGET_BRANCH}` is ahead N / behind M of `${BASE_REMOTE}`. Merging PR #<number> would also squash these unpushed commits into it: `<list>`. Push or reconcile `${TARGET_BRANCH}` first, then re-run — or tell me to proceed and absorb them." The merge is irreversible and this is the last cheap moment to fix it, which is why this is a stop rather than a warning.
+
 #### Branch on PR state
 
 This is what makes the skill resumable:
@@ -217,7 +241,7 @@ git -C "${WORK_ROOT}" fetch "${BASE_REMOTE}" "${TARGET_BRANCH}:refs/remotes/${BA
 git -C "${WORK_ROOT}" checkout -b "${TARGET_BRANCH}" "${BASE_REMOTE}/${TARGET_BRANCH}"
 ```
 
-`--ff-only` refuses → the local target branch has diverged from the base repository. Stop and report; do not merge or rebase it to force it through. The `log` line confirms the squash commit is present.
+`--ff-only` refuses → the local target branch has diverged from the base repository. Stop and report; do not merge or rebase it to force it through. Step 1e should have caught this before the merge — reaching it here means the divergence appeared mid-run, or 1e was skipped. Say which, because the merge has already happened and the user needs to know the cleanup is unfinished rather than failed. The `log` line confirms the squash commit is present.
 
 ---
 
@@ -406,6 +430,7 @@ List every branch, including the obviously fine ones — a branch left out of th
 - Never delete a remote branch on the strength of the merge alone; check the live tip and use a `--force-with-lease` on the SHA you verified
 - Never pass `--delete-branch` to `gh pr merge`, and never treat a successful merge command as a merged PR
 - Never run a bare `git pull`, `git push`, or `git fetch`, and pass `--repo "${BASE_REPO}"` to every `gh` command — the sole exception is the branch-inference lookup in 1b, which cannot take it
+- Check the local target branch against its remote before merging, not after. A PR branched from a stale target silently carries that target's unpushed commits into the squash, because GitHub diffs from the merge-base rather than your branch point
 - Resolve in dependency order: repository, then PR, then remotes, then capabilities
 - Probe GitHub access, fetch, push, and local checkout separately — never infer one from another
 - Steps 3-6b run against `WORK_ROOT`, which Step 3 may move; re-check cleanliness wherever it lands
