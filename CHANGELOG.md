@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- `/merge` never checked the local target branch against its remote, so a PR branched from a stale target silently carried that target's unpushed commits into the squash — GitHub diffs a PR from its merge-base with the base branch, not from the commit you branched at. Step 1e now counts ahead/behind with `git rev-list --left-right --count`, tests each unpushed commit against the PR head with `merge-base --is-ancestor`, and stops before merging when any of them would be absorbed. Previously the only signal was Step 3's `pull --ff-only` refusing — correct, but after the irreversible merge
+
 ### Added
 - `tools/codex-setup-sync/` — Windows-first PowerShell tool for syncing portable Codex setup across machines through a private git repo
 - Config rendering, machine-local overlays, optional session export/import, wrapper generation, and Pester coverage for `codex-setup-sync`

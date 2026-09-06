@@ -141,7 +141,9 @@ One-command workflow to squash-merge a PR and update all project docs in a singl
 
 ```mermaid
 graph TD
-    A["Preflight: probe capabilities,\nresolve PR (arg or branch)"] --> B{PR state?}
+    A["Preflight: probe capabilities,\nresolve PR (arg or branch)"] --> A2{"Target branch\nin sync?"}
+    A2 -- "Ahead: PR would absorb\nunpushed commits" --> AZ[Stop before merging]
+    A2 -- Yes --> B{PR state?}
     B -- MERGED --> C[Switch to Target Branch]
     B -- OPEN --> M[Squash-Merge]
     M --> N{GitHub reports merged?}
@@ -166,7 +168,7 @@ graph TD
 
 > **Requires:** git + (gh or GitHub MCP)
 >
-> **Key features:** Content-proof branch deletion (`git patch-id --verbatim`, since a squash merge breaks the ancestry that `-d` tests and the default algorithm ignores whitespace), confirms GitHub actually merged rather than queued, repo-wide sweep across local branches, remote branches and stale tracking refs, never deletes a protected or worktree-held branch or one it could not verify, falls back to a follow-up PR when the target rejects direct pushes, reports outstanding work alongside a full branch inventory
+> **Key features:** Stops before merging when the local target branch is ahead of its remote, because a PR branched from a stale target silently absorbs its unpushed commits into the squash, content-proof branch deletion (`git patch-id --verbatim`, since a squash merge breaks the ancestry that `-d` tests and the default algorithm ignores whitespace), confirms GitHub actually merged rather than queued, repo-wide sweep across local branches, remote branches and stale tracking refs, never deletes a protected or worktree-held branch or one it could not verify, falls back to a follow-up PR when the target rejects direct pushes, reports outstanding work alongside a full branch inventory
 
 ---
 
