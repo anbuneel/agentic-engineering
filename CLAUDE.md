@@ -22,7 +22,9 @@ tools/           ← Standalone CLI tools
   claude-memory-sync/  ← Cross-machine Claude memory sync via git
   codex-setup-sync/    ← Cross-machine Codex setup sync via git
 scripts/         ← Dev tooling
-  check-skill-sync.sh
+  check-skill-sync.sh        ← drift check across every install root
+  install-skill-links.ps1    ← link or copy skills into Claude, Codex, ~/.agents
+  tests/                     ← Pester coverage; run with `Invoke-Pester scripts/tests`
 ```
 
 ## Live Links (Development Setup)

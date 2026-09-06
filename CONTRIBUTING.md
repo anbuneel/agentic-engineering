@@ -49,7 +49,8 @@ Look at `agents/codebase-snapshot.md` as the reference example.
 1. Fork the repo and create a branch from `main`
 2. Make your changes
 3. Test your skill/agent by running it in Claude Code on a real project
-4. Open a PR with:
+4. If you changed anything under `scripts/` or `tools/`, run the matching Pester suite (`Invoke-Pester scripts/tests`, `Invoke-Pester tools/codex-setup-sync/tests`)
+5. Open a PR with:
    - A clear title describing what you added or changed
    - A description explaining **why** this is useful
    - Confirmation that you tested it
