@@ -273,9 +273,9 @@ Use `-Targets Agents` for `~/.agents/skills/`, or `-Targets Claude,Codex` to lin
 
 Invoke from Codex with `$multi-agent-code-review` or select the skill through `/skills`. Codex plugin packaging and generated install bundles are intentionally out of scope for this pass.
 
-### Detect Claude Sync Drift
+### Detect Skill Sync Drift
 
-Links can break when tools recreate files instead of editing in place. The included `scripts/check-skill-sync.sh` currently checks Claude Code command links. Add a `SessionStart` hook to `~/.claude/settings.json` to get warned at the start of every Claude Code session:
+Links break when tools recreate files instead of editing in place, and a plain copy goes stale the moment the repo changes. `scripts/check-skill-sync.sh` checks **every** install root this repo can target — Claude Code commands and agents, `$CODEX_HOME/skills`, and `~/.agents/skills` — because a current symlink in one runtime hides a months-old copy in another. Add a `SessionStart` hook to `~/.claude/settings.json` to get warned at the start of every Claude Code session:
 
 ```json
 {
@@ -295,7 +295,7 @@ Links can break when tools recreate files instead of editing in place. The inclu
 }
 ```
 
-The script silently exits if the repo directory doesn't exist, so it's safe to add globally.
+The script silently exits if the repo directory doesn't exist, so it's safe to add globally. It reports a root only when that root is in use — it exists and already holds at least one skill from this repo — so installing for one runtime never produces warnings about the others. Only tracked files count as shipped skills, so a work-in-progress file in `skills/` is not reported as missing everywhere.
 
 ### Install Individual Files (Claude Code)
 

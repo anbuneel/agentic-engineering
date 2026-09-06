@@ -76,7 +76,7 @@ function Install-File {
     $parent = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
 
-    if (Test-LinkTarget -Path $Destination -Target $Source) {
+    if ($Mode -ne 'Copy' -and (Test-LinkTarget -Path $Destination -Target $Source)) {
         Write-Host "Already linked: $Destination -> $Source"
         return
     }

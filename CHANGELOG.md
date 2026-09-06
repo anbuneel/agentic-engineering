@@ -7,7 +7,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ### Fixed
 - `/merge` never checked the local target branch against its remote, so a PR branched from a stale target silently carried that target's unpushed commits into the squash — GitHub diffs a PR from its merge-base with the base branch, not from the commit you branched at. Step 1e now counts ahead/behind with `git rev-list --left-right --count`, tests each unpushed commit against the PR head with `merge-base --is-ancestor`, and stops before merging when any of them would be absorbed. Previously the only signal was Step 3's `pull --ff-only` refusing — correct, but after the irreversible merge
 
+- `scripts/check-skill-sync.sh` only checked `~/.claude/commands`, so a stale skill in `$CODEX_HOME/skills` stayed invisible while the Claude symlink reported clean — which is how a pre-release copy of `/merge` sat installed for Codex through an entire round of fixes. It now checks Claude commands and agents, `$CODEX_HOME/skills`, and `~/.agents/skills`, reporting a root only when that root is already in use and only for git-tracked files, so single-runtime installs and work-in-progress skills produce no noise
+- `scripts/install-skill-links.ps1` returned early on "Already linked" before consulting `-Mode`, so an explicit `-Mode Copy` was silently skipped whenever the destination was already a correct symlink, and the run reported success without replacing it
+
 ### Added
+- `scripts/tests/install-skill-links.Tests.ps1` — Pester coverage for the installer's mode handling, including a regression test that fakes the "already linked" answer so the Copy-mode fix stays verified on machines where symlink creation needs elevation
 - `tools/codex-setup-sync/` — Windows-first PowerShell tool for syncing portable Codex setup across machines through a private git repo
 - Config rendering, machine-local overlays, optional session export/import, wrapper generation, and Pester coverage for `codex-setup-sync`
 - Agent-agnostic reviewer registry model for shipped skills, covering primary driver, native subagents, external CLI reviewers, common GitHub review agents, skipped reviewers, and reviewer independence notes

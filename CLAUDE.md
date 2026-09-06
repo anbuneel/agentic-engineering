@@ -49,7 +49,7 @@ Use `.\scripts\install-skill-links.ps1 -Targets Codex` to symlink shipped skills
 
 Edit in either location, changes sync instantly. If a link breaks (tool deleted and recreated the file instead of editing in place), re-run the commands above or the installer script.
 
-**Sync check:** Add a `SessionStart` hook to `~/.claude/settings.json` to detect drift at the start of every Claude Code session:
+**Sync check:** `scripts/check-skill-sync.sh` checks every install root — Claude commands and agents, `$CODEX_HOME/skills`, and `~/.agents/skills` — reporting only roots already in use, and only for tracked files. Add a `SessionStart` hook to `~/.claude/settings.json` to detect drift at the start of every Claude Code session:
 
 ```json
 {
