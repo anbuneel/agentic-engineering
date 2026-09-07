@@ -20,25 +20,17 @@ Orchestrate a multi-agent AI security review of the entire codebase. The **prima
 
 ## Prerequisites
 
-Requires **git**. Optional reviewer channels: Claude, Codex, Gemini, and native subagents. Missing reviewers do not block; record reduced coverage in the report.
+Requires **git**. Optional reviewer channels: Claude, Codex, and native subagents. Missing reviewers do not block; record reduced coverage in the report.
 
 ---
 
 ## Options
 
-Use `effort=<fast|balanced|deep>` as the cross-agent option. Map it to the runtime's native model or reasoning controls where available. Default to `balanced`.
+- `effort=<fast|balanced|deep>` — default `balanced`. Maps to reasoning effort only; every driver inherits the user's configured model.
+- `model=<fable|opus|sonnet|haiku>` — Claude model override for native subagents and the Claude reviewer channel.
+- `budget=<usd>` — per-run `--max-budget-usd` for the Claude reviewer channel. No cap by default.
 
-Claude Code compatibility: also accept `model=<sonnet|opus|haiku>` for Claude-native subagent dispatch. If present, store it as `CLAUDE_SUB_AGENT_MODEL`; otherwise choose the runtime default for the selected effort.
-
-Effort mapping:
-
-| Effort | Claude-native / Claude CLI | Codex CLI | Reviewer timeouts |
-|--------|-----------------------------|-----------|-------------------|
-| `fast` | Prefer Haiku when selecting a Claude model; pass `--effort low` when supported | Prefer inherited `~/.codex/config.toml`; if overriding effort, use `-c model_reasoning_effort="low"` | Shortest |
-| `balanced` | Prefer Sonnet when selecting a Claude model; pass `--effort medium` when supported | Prefer inherited config; if overriding effort, use `-c model_reasoning_effort="medium"` | Default |
-| `deep` | Prefer Opus when selecting a Claude model and the user accepts cost; pass `--effort high` when supported | Prefer inherited config; if overriding effort, use `-c model_reasoning_effort="high"` | Longest |
-
-`model=<sonnet|opus|haiku>` overrides only Claude model selection. Do not hardcode a Codex model with `-m`; Codex model selection is inherited unless the user explicitly requests otherwise.
+The mapping table, override rules, and cost notes are in [references/reviewer-contracts.md](references/reviewer-contracts.md). Every reviewer and lens returns the object in [references/findings-schema.md](references/findings-schema.md) with the severity enum `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`. Print the resolved effort, model override, and budget at startup.
 
 ---
 
@@ -62,10 +54,10 @@ Reviewer defaults:
 
 - Always run `primary-native` security analysis.
 - Use native subagents for focused lenses when available.
-- Claude primary: Codex CLI and Gemini CLI are optional external reviewers. Skip a separate Claude CLI reviewer by default because it is same-family unless the user explicitly requests it.
-- Codex primary: Claude reviewer channel and Gemini CLI are optional external reviewers; secondary Codex sessions must be labeled `secondary same-family review` and are skipped by default unless explicitly requested.
+- Claude primary: Codex CLI is the optional external reviewer. Skip a separate Claude CLI reviewer by default because it is same-family unless the user explicitly requests it.
+- Codex primary: the Claude reviewer channel is the optional external reviewer; secondary Codex sessions must be labeled `secondary same-family review` and are skipped by default unless explicitly requested.
 
-When Codex is the primary driver, external reviewer subprocesses (`claude`, `gemini`, and optional secondary `codex`) require sandbox and approval settings that permit launching those commands and using their network-backed model sessions. If a subprocess is blocked by policy, mark that reviewer as skipped and continue.
+When Codex is the primary driver, external reviewer subprocesses (`claude` and optional secondary `codex`) require sandbox and approval settings that permit launching those commands and using their network-backed model sessions. If a subprocess is blocked by policy, mark that reviewer as skipped and continue.
 
 By default, no external reviewer is required. A reviewer becomes required only when the user explicitly requests it. Advisory reviewer skips reduce confidence but do not block report generation.
 
@@ -130,11 +122,8 @@ claude --version
 ```bash
 codex --version
 ```
-```bash
-gemini --version
-```
 
-Set `HAS_CLAUDE_REVIEWER`, `HAS_CODEX`, and `HAS_GEMINI` to true/false based on the primary driver and configured reviewer channels. If unavailable, warn and continue. If Codex is primary and Claude reviewer channel is unavailable, record that explicitly in `reviewerRegistry`.
+Set `HAS_CLAUDE_REVIEWER` and `HAS_CODEX` to true/false based on the primary driver and configured reviewer channels. If unavailable, warn and continue. If Codex is primary and Claude reviewer channel is unavailable, record that explicitly in `reviewerRegistry`.
 
 ### Step 1f: Initialize State File
 
@@ -157,15 +146,19 @@ Write state to `${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json`:
 
 **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth.**
 
+Also write the findings schema, with the `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` severity enum, to `${REVIEW_DIR}/findings.schema.json`.
+
 ---
 
 ## Phase 2: AI Security Analysis
 
 ### Step 2a: Native Subagents
 
-Launch these 3 focused security lenses **in parallel** when native subagents are available. If native subagents are unavailable, run the same lenses as primary-native analysis passes and label them accordingly.
+Launch the three lens agents that ship with this plugin **in parallel**: `code-reviewer`, `silent-failure-hunter`, and `type-design-analyzer` (dispatch rules in [references/reviewer-contracts.md](references/reviewer-contracts.md), "Native lens agents"). Under Codex primary without custom agents, run the same three prompts as primary-native passes and label them `primary-native`.
 
-**1. Code correctness/security reviewer**
+Prefix every prompt with "Repository root: ${PROJECT_ROOT}. Severity scale: CRITICAL, HIGH, MEDIUM, LOW. Return the findings object defined by this schema as your final message: [schema JSON]."
+
+**1. `code-reviewer`**
 
 Prompt: "Perform a security-focused review of the ENTIRE codebase (not just recent changes). Focus on:
 - Injection vulnerabilities (SQL, command, XSS, template injection)
@@ -176,7 +169,7 @@ Prompt: "Perform a security-focused review of the ENTIRE codebase (not just rece
 - Path traversal and file inclusion
 Report each finding with: severity (CRITICAL / HIGH / MEDIUM / LOW), file path, line number, vulnerability type, and description."
 
-**2. Silent failure hunter**
+**2. `silent-failure-hunter`**
 
 Prompt: "Perform a security-focused review of the ENTIRE codebase (not just recent changes). Focus on:
 - Fail-open patterns (catch blocks that allow continued execution on security failures)
@@ -186,7 +179,7 @@ Prompt: "Perform a security-focused review of the ENTIRE codebase (not just rece
 - Empty catch blocks around cryptographic or authentication operations
 Report each finding with: severity (CRITICAL / HIGH / MEDIUM / LOW), file path, line number, vulnerability type, and description."
 
-**3. Type/design analyzer**
+**3. `type-design-analyzer`**
 
 Prompt: "Perform a security-focused review of the ENTIRE codebase (not just recent changes). Focus on:
 - Type coercion vulnerabilities (loose equality, implicit conversions in security checks)
@@ -196,9 +189,7 @@ Prompt: "Perform a security-focused review of the ENTIRE codebase (not just rece
 - Types that fail to encode security invariants (e.g., sanitized vs raw strings)
 Report each finding with: severity (CRITICAL / HIGH / MEDIUM / LOW), file path, line number, vulnerability type, and description."
 
-Claude Code adapter: use the Task tool with `CLAUDE_SUB_AGENT_MODEL` when configured.
-
-Codex adapter: use Codex subagents/custom agents when available. If not configured, run the prompts directly as primary-native passes.
+Put the vulnerability type at the start of each finding's `title`.
 
 ### Step 2b: Primary-Native Analysis
 
@@ -242,33 +233,15 @@ Launch external security reviewers in parallel when the runtime supports paralle
 
 Read the state file to restore variables.
 
-**Codex CLI**:
+Run the Codex channel under Claude primary and the Claude channel under Codex primary, using the round-1 commands from [references/reviewer-contracts.md](references/reviewer-contracts.md) with the findings schema and this prompt substituted into `[PROMPT]`:
 
-```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" "You are a security auditor. Perform a comprehensive security review of this entire codebase. Check for: injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. For each finding report: SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), file path, line number, vulnerability type, and detailed description. End with a count of findings by severity."
+```text
+Repository root: ${PROJECT_ROOT}. You are a security auditor. Perform a comprehensive security review of this entire codebase. Use read-only file access and read-only git commands only. Check for: injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. Report each finding with severity CRITICAL, HIGH, MEDIUM, or LOW, the file path relative to the repository root, the line number, and a title that starts with the vulnerability type. Do not modify files. Return only the findings object.
 ```
 
-Capture the output from the shell result and write it to `${REVIEW_DIR}/codex-security-${REVIEW_ID}.md` using the primary driver's file-write capability. If Codex is primary, skip this reviewer by default unless explicitly requested; if run, label it as `secondary same-family review`.
+Output files: `${REVIEW_DIR}/claude-security-round-1-${REVIEW_ID}.json` and `${REVIEW_DIR}/codex-security-round-1-${REVIEW_ID}.json`. This skill is single-pass, so store the session ids but do not resume them. A same-family second session runs only when the user asked for it and is labeled `secondary same-family review`.
 
-**Claude reviewer channel**: when Codex is primary and Claude CLI is configured, run the same read-only security audit prompt with Claude CLI. Launch it with the shell command working directory set to `PROJECT_ROOT`; do not use `cd`. If the runtime cannot set cwd directly, add `--add-dir "${PROJECT_ROOT}"` and include `PROJECT_ROOT` in the prompt.
-
-```bash
-claude -p "Repository root: ${PROJECT_ROOT}. You are a security auditor. Perform a comprehensive security review of this entire codebase. Use read-only file access and read-only git commands only. Check for: injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. For each finding report: SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), file path, line number, vulnerability type, and detailed description. Do not modify files. End with a count of findings by severity." --permission-mode plan --allowedTools "Read" "Grep" "Glob" "Bash(git grep:*)" "Bash(git log:*)" "Bash(git status:*)" --disallowedTools "Edit" "Write" "MultiEdit" --output-format json
-```
-
-If `model=<sonnet|opus|haiku>` or an effort mapping selects a Claude model, add the matching Claude `--model` option. If effort is configured and the installed Claude CLI supports it, add `--effort low|medium|high`. Parse the JSON response natively, store `session_id` as `externalThreadIds.claude`, extract `result`, and write it to `${REVIEW_DIR}/claude-security-${REVIEW_ID}.md`.
-
-When Claude is primary, skip a separate Claude CLI reviewer by default because it is same-family unless the user explicitly requested it.
-
-**Gemini CLI**: when available, run the same read-only security audit prompt:
-
-```bash
-gemini -p "You are a security auditor. Perform a comprehensive security review of this entire codebase. Check for injection vulnerabilities, authentication flaws, authorization bypasses, sensitive data exposure, cryptographic weaknesses, insecure configurations, SSRF, deserialization issues, and any other security concerns. For each finding report: SEVERITY (CRITICAL/HIGH/MEDIUM/LOW), file path, line number, vulnerability type, and detailed description. Do NOT modify files. End with a count of findings by severity." -y
-```
-
-Capture the output from the shell result and write it to `${REVIEW_DIR}/gemini-security-${REVIEW_ID}.md` using the primary driver's file-write capability.
-
-Read each output file with the primary driver's file-read capability. Parse findings from the content and update state.
+Read each output file with the primary driver's file-read capability and add its findings to the state file.
 
 ---
 
@@ -278,7 +251,7 @@ Read each output file with the primary driver's file-read capability. Parse find
 
 Read the state file to restore all findings.
 
-Combine findings from all sources: primary-native analysis, native subagents, and external reviewers. Deduplicate using `file:line:vulnerabilityType` fingerprints. When duplicates found, keep the highest severity and note which reviewers agreed.
+Combine findings from all sources: primary-native analysis, the three lens agents, and external reviewers. Compute fingerprints and deduplicate as described in [references/findings-schema.md](references/findings-schema.md). When duplicates are found, keep the highest severity and note which reviewers agreed.
 
 ### Step 4b: Counter-Review
 
@@ -352,7 +325,6 @@ This audit used multiple AI agents to analyze the full codebase for security vul
 | Native type/design analyzer | Type coercion, unsafe casts, data flow | N / Skipped |
 | Claude reviewer channel | Comprehensive audit | N / Skipped |
 | Codex CLI | Comprehensive audit | N / Skipped |
-| Gemini CLI | Comprehensive audit | N / Skipped |
 
 Findings were deduplicated, counter-reviewed, and validated through a user decision gate.
 
@@ -435,13 +407,11 @@ This is an AI-powered analysis and may contain false positives or miss vulnerabi
 
 ---
 
-## Phase 7: Cleanup & Present
+## Phase 7: Present
 
-### Step 7a: Cleanup
+Leave `.review/` in place. It is gitignored and every file carries the review id, so nothing needs deleting.
 
-Delete the state file: `rm -f "${REVIEW_DIR}/security-audit-state-${REVIEW_ID}.json"` (single Bash command, permission prompt expected).
-
-### Step 7b: Present Results
+### Step 7a: Present Results
 
 Present to the user:
 
@@ -461,10 +431,8 @@ Present to the user:
 - Quote all bash variables: `"${VAR}"`
 - **Never use `cd`** — use absolute paths everywhere, `-C <dir>` for Codex
 - **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
-- Codex model inherited from `~/.codex/config.toml` — do not hardcode `-m`
-- Always `-s read-only` for Codex
-- Claude CLI reviewer runs with `--permission-mode plan --output-format json`; capture `session_id` when it runs
-- Launch Claude CLI with command cwd set to `PROJECT_ROOT`; if unavailable, add `--add-dir "${PROJECT_ROOT}"` and include the repo root in the prompt
+- Every driver inherits the user's configured model; `effort=` maps to reasoning effort only, `model=` overrides Claude only
+- External reviewer commands, flags, output parsing, and failure handling come from `references/reviewer-contracts.md`; every reviewer and lens returns the `references/findings-schema.md` object
 - Required external reviewers default to none; only user-explicit reviewers are required
 - Sandbox or network policy blocks on advisory reviewers degrade coverage but do not block report generation
 - Do NOT commit the report automatically — let the user decide

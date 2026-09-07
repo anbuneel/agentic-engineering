@@ -4,7 +4,30 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+- Skills moved from `skills/<name>.md` to `skills/<name>/SKILL.md` to follow the Agent Skills specification; each directory name now equals the frontmatter `name`
+- The repo is now a plugin for both Claude Code (`.claude-plugin/`) and Codex (`.codex-plugin/`, `.agents/plugins/`), published as `ae`. One install per machine covers every project, worktree, and the Codex desktop app; Claude Code invokes skills as `/ae:<name>`
+- Reviewer channels are Claude and Codex only. Gemini CLI support was removed from every skill, the docs, and the sample artifact
+- `effort=` no longer picks a Claude model tier. Every driver inherits the user's configured model; effort maps to `--effort low|xhigh` on Claude and `-c model_reasoning_effort` on Codex. `model=` accepts `fable|opus|sonnet|haiku`, and `budget=<usd>` caps Claude reviewer runs
+- External reviewers return one JSON findings object per round, enforced with `--json-schema` on Claude and `--output-schema` on Codex, instead of a `VERDICT:` line parsed out of prose. Codex output is read from the `-o` file rather than scraped from `item.completed` events; Claude output is read from `structured_output`
+- Reviewer command contracts and the findings schema moved into each multi-agent skill's `references/` directory (identical copies, per the Agent Skills layout), which brings every `SKILL.md` under the 500-line guideline
+- `/multi-agent-code-review` sequence rewritten. Round 1 fans out to every reviewer; a verification round runs only after fixes and re-engages only the reviewers whose findings were acted on; bots are polled only after a push; a clean round 1 converges instead of always running two rounds. The pre-review and loop pipelines are one pipeline
+- `/multi-agent-code-review` no longer blocks on the user. Reject and defer dispositions are recorded with both arguments under "Needs your call" and presented at finalize; `decisions=interactive` restores the mid-loop question. `require=<reviewer>` makes a reviewer mandatory
+- `/multi-agent-code-review` rebases once at preflight and reports a moved base at finalize instead of rebasing every round, which invalidated resumed reviewer sessions
+- `/multi-agent-code-review` quality gates come from a `Quality gates` section in the project's `CLAUDE.md` or `AGENTS.md` when present, else are detected from `package.json` (with the right package manager, including pnpm and turbo roots), `pyproject.toml`, `Cargo.toml`, or `go.mod`
+- `/multi-agent-plan-review` follows the same loop shape: reject and defer go to Needs your call instead of a blocking gate (`decisions=interactive` to opt back in), a round with nothing to revise converges instead of always running two rounds, and an advisory reviewer's `REVISE` verdict no longer forces another round; `require=<reviewer>` makes one mandatory
+- Skills no longer delete `.review/`. It is gitignored and every file carries the run id, so the `rm -rf` step and its permission are gone from every skill
+
+### Removed
+- The simplification pass at the start of `/multi-agent-code-review`. It committed an unreviewed refactor before any reviewer saw the code and was Claude-only; run `/simplify` separately when wanted
+- `scripts/install-skill-links.ps1`, its Pester tests, and `scripts/check-skill-sync.sh`. Plugin installs are cached and updated by the tools themselves, so per-runtime symlinks and the drift check have nothing left to do
+
+### Added
+- `scripts/Set-PluginVersion.ps1` bumps the version in every plugin manifest before a release
+- `agents/code-reviewer.md`, `agents/silent-failure-hunter.md`, `agents/type-design-analyzer.md` — the three review lenses the multi-agent skills dispatch. They were previously assumed to be Claude Code built-ins, which no longer exist, so the skills silently fell back to the primary driver reviewing itself
+
 ### Fixed
+- Agent frontmatter for `codebase-snapshot` and `code-cleanup-analyst` did not parse: the descriptions embedded unquoted `<example>` blocks with `: ` sequences, so every field after `name` was silently dropped at load time and the agents ran with default tools and model. Descriptions are folded block scalars now, and the stale Playwright MCP tool list is gone
 - `/merge` never checked the local target branch against its remote, so a PR branched from a stale target silently carried that target's unpushed commits into the squash — GitHub diffs a PR from its merge-base with the base branch, not from the commit you branched at. Step 1e now counts ahead/behind with `git rev-list --left-right --count`, tests each unpushed commit against the PR head with `merge-base --is-ancestor`, and stops before merging when any of them would be absorbed. Previously the only signal was Step 3's `pull --ff-only` refusing — correct, but after the irreversible merge
 
 - `scripts/check-skill-sync.sh` only checked `~/.claude/commands`, so a stale skill in `$CODEX_HOME/skills` stayed invisible while the Claude symlink reported clean — which is how a pre-release copy of `/merge` sat installed for Codex through an entire round of fixes. It now checks Claude commands and agents, `$CODEX_HOME/skills`, and `~/.agents/skills`, reporting a root only when that root is already in use and only for git-tracked files, so single-runtime installs and work-in-progress skills produce no noise

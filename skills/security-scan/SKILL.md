@@ -239,13 +239,9 @@ Write the report to `${PROJECT_ROOT}/docs/analysis/security-scan-${SCAN_ID}.md`:
 
 ---
 
-## Phase 4: Cleanup
+## Phase 4: Wrap Up
 
-Delete temporary JSON files (single Bash command, permission prompt expected). Only include files for tools that actually ran:
-
-```bash
-rm -f "${REVIEW_DIR}/semgrep-${SCAN_ID}.json" "${REVIEW_DIR}/npm-audit-${SCAN_ID}.json" "${REVIEW_DIR}/gitleaks-${SCAN_ID}.json"
-```
+Leave the raw scanner output under `.review/` in place. It is gitignored and every file carries the scan id, so nothing needs deleting.
 
 ---
 

@@ -1,0 +1,20 @@
+{
+  "name": "ae",
+  "version": "0.8.0",
+  "description": "Agentic Engineering: multi-agent code review, plan review, ideation, merge, and security workflows with counter-review on every finding.",
+  "author": {
+    "name": "Anbu N",
+    "url": "https://github.com/anbuneel"
+  },
+  "homepage": "https://github.com/anbuneel/agentic-engineering",
+  "repository": "https://github.com/anbuneel/agentic-engineering",
+  "license": "MIT",
+  "keywords": ["code-review", "multi-agent", "claude", "security", "merge"],
+  "skills": "./skills",
+  "interface": {
+    "displayName": "Agentic Engineering",
+    "shortDescription": "Multi-agent review, merge, and security workflows",
+    "developerName": "Anbu N",
+    "category": "Developer Tools"
+  }
+}

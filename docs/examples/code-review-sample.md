@@ -31,7 +31,6 @@
 | native-type-design-analyzer | Native subagent | Ran | native |
 | claude-reviewer | External reviewer | Ran | independent |
 | codex-cli | External reviewer | Ran | secondary same-family |
-| gemini-cli | External reviewer | Skipped - not configured | independent |
 | gh:claude-bot | GitHub review agent | Ran | independent |
 | gh:devin | GitHub review agent | Ran | independent |
 | gh:codex | GitHub review agent | Ran | independent |
@@ -102,13 +101,13 @@ All pre-review findings applied. Committed: `fix: pre-review findings`.
 | 7 | codex-cli | Refresh token rotation | SHOULD FIX | defer | Valid but requires schema migration, out of scope for this PR |
 | 8 | claude-reviewer | Error message leaks email existence | SHOULD FIX | reject | Intentional UX decision — login form shows inline field errors |
 
-### Decision Gate — Round 1
+### Needs your call — recorded in Round 1, not blocking
 
-**Finding #7 (defer):** Codex recommends refresh token rotation. The primary driver defers — requires DB schema change.
-> **User decision:** Confirmed defer. Will address in follow-up PR #44.
+**Finding #7 (defer):** Codex recommends refresh token rotation. The primary driver defers — requires a DB schema change.
+> Reviewer: stolen refresh tokens stay valid indefinitely. Primary driver: valid, but the migration is out of scope for this PR. Held for the user; tracked as issue #44 at finalize.
 
 **Finding #8 (reject):** Claude reviewer flags email existence leak. The primary driver rejects — intentional design.
-> **User decision:** Confirmed reject. Error messages are an intentional UX choice for this app.
+> Reviewer: "user not found" vs "wrong password" confirms account existence. Primary driver: the login form shows inline field errors by design. Held for the user in the final comment and artifact.
 
 ### Fixes Applied
 
@@ -119,7 +118,9 @@ Committed: `fix: round 1 must-fix findings`
 
 ---
 
-## Round 2
+## Round 2 (Verification)
+
+Engaged: codex-cli and claude-reviewer (both had findings fixed in round 1), GitHub bots (commits were pushed). Lens agents were not re-engaged: none of their findings changed in round 1.
 
 ### External Reviewer Feedback
 
@@ -154,14 +155,13 @@ No new findings.
 
 **VERDICT: APPROVED**
 
-Converged after 3 rounds — all MUST FIX resolved, fixes verified, no new issues.
+Converged after 3 rounds — no fixes this round, all pending GitHub bot findings verified, no new issues.
 
 ## Confidence Notes
 
 - GitHub review agents were polled in every round and pending GH findings were verified by fingerprint.
 - Claude reviewer channel was available under Codex primary, preserving cross-model review; its `session_id` was captured and resumed across rounds.
 - Codex CLI feedback was useful but labeled secondary same-family because Codex App was the primary driver.
-- Gemini was skipped because it was not configured for this run.
 
 ---
 

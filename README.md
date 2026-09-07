@@ -4,7 +4,7 @@ Agent-agnostic workflow skills for AI coding agents. The skills add multi-agent 
 
 **View the [Visual Skills Guide](docs/SKILLS_GUIDE.md) for flow diagrams of every workflow.**
 
-Each skill is a markdown file. Install it in your agent runtime, invoke the command, and the primary driver coordinates the workflow with available subagents, external model reviewers, and GitHub review agents.
+Each skill is a markdown file. Install the plugin once per machine, invoke the skill, and the primary driver coordinates the workflow with available subagents, external model reviewers, and GitHub review agents. Skill names below are shown bare; in Claude Code they carry the plugin prefix (`/ae:merge`), in Codex they are `$merge`.
 
 ## Who Is This For?
 
@@ -16,16 +16,16 @@ You use Claude Code, Codex App, Codex CLI, or another capable coding agent and w
 
 **Supported primary drivers:** Claude Code, Codex App, and Codex CLI.
 
-**Optional reviewer channels:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`), Claude CLI reviewer channel, [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`), and GitHub review agents. Without them, skills degrade gracefully and record the reduced reviewer set in the artifact.
+**Optional reviewer channels:** [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`), Claude CLI reviewer channel, and GitHub review agents. Without them, skills degrade gracefully and record the reduced reviewer set in the artifact.
 
 | Skill | Claude primary | Codex App primary | Codex CLI primary | Optional reviewers |
 |-------|----------------|-------------------|-------------------|--------------------|
-| `/multi-agent-code-review` | Yes | Yes | Yes | Claude, Codex, Gemini, GH bots |
-| `/multi-agent-plan-review` | Yes | Yes | Yes | Claude, Codex, Gemini |
-| `/multi-agent-ideate` | Yes | Yes | Yes | Claude, Codex, Gemini |
+| `/multi-agent-code-review` | Yes | Yes | Yes | Claude, Codex, GH bots |
+| `/multi-agent-plan-review` | Yes | Yes | Yes | Claude, Codex |
+| `/multi-agent-ideate` | Yes | Yes | Yes | Claude, Codex |
 | `/security-posture` | Yes | Yes | Yes | gh for branch protection |
 | `/security-scan` | Yes | Yes | Yes | Semgrep, Gitleaks, npm audit |
-| `/security-audit` | Yes | Yes | Yes | Claude, Codex, Gemini |
+| `/security-audit` | Yes | Yes | Yes | Claude, Codex |
 | `/merge` | Yes | Yes | Yes | gh or GitHub MCP |
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
@@ -48,25 +48,20 @@ The core contribution — multi-agent review with counter-review, decision gates
 
 ### `/multi-agent-code-review` — Multi-Agent Code Review
 
-[`skills/multi-agent-code-review.md`](skills/multi-agent-code-review.md) | Requires: git, gh
+[`skills/multi-agent-code-review/SKILL.md`](skills/multi-agent-code-review/SKILL.md) | Requires: git, gh
 
-The primary driver reviews your PR, gathers feedback from available native subagents, external CLI reviewers, and GitHub review agents, then **counter-reviews every finding** — agreeing, scoping down, deferring, or rejecting with justification. You break ties on rejections and deferrals. Runs 2-5 rounds until all issues are resolved, with a mandatory verification round after fixes.
+The primary driver reviews your PR, gathers feedback from the three review lenses, the cross-family CLI reviewer, and GitHub review agents, then **counter-reviews every finding** — agreeing, scoping down, deferring, or rejecting with justification. Rejections and deferrals never block the loop: they are recorded with both sides' arguments and handed to you at the end under "Needs your call". Round 1 fans out to everyone; a verification round runs only after fixes, and only for the reviewers whose findings were acted on. A clean round 1 converges immediately; the cap is 5 rounds.
 
 See a [sample review artifact](docs/examples/code-review-sample.md) to understand what the output looks like.
 
 **How it works:**
 
-1. **Code simplification** — Claude Code may use `/simplify`; Codex and other runtimes run an equivalent inline simplification pass when safe
-2. **Pre-review** — primary-native analysis and available native subagents scan in parallel
-3. **PR creation** — pushes the branch and opens a PR if one doesn't exist
-4. **Multi-agent review loop** (2-5 rounds):
-   - External reviewers and GitHub bot polling run **in parallel** where the runtime supports it
-   - The primary driver **counter-reviews** every finding from every source
-   - GH bot findings are **verified across rounds** — tracked by fingerprint to confirm fixes are accepted
-   - You resolve any rejections or deferrals at the **decision gate**
-   - The primary driver fixes agreed findings, commits, pushes
-   - Next round verifies the fixes — convergence requires all GH bot findings verified
-5. **Finalize** — deferred items become GitHub issues, review artifact saved to `docs/reviews/`
+1. **Preflight** — clean tree, base branch, quality gates (from the project's `CLAUDE.md`/`AGENTS.md` or detected from the build files), findings schema, one rebase check, PR created if missing
+2. **Round 1** — the three lens agents, the cross-family CLI reviewer, and GitHub bot polling run **in parallel**; every reviewer returns one findings object
+3. **Counter-review** — the primary driver dispositions every finding; reject and defer go to **Needs your call** without stopping the loop (`decisions=interactive` to be asked mid-loop instead)
+4. **Fix** — MUST_FIX committed first as a checkpoint, then SHOULD_FIX; quality gates after each batch; push; round summary posted to the PR
+5. **Verification rounds** — only when fixes landed: resume just the reviewers whose findings were acted on, poll bots only after a push, verify GH bot findings by fingerprint
+6. **Finalize** — Needs your call presented, deferred items become GitHub issues, PR description and final comment updated, full audit trail saved to `docs/reviews/`
 
 **Counter-review dispositions:**
 
@@ -74,34 +69,34 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 |-------------|---------|--------|
 | **agree** | Reviewer is right | Fix now |
 | **partial** | Valid but scoped down | Fix the core issue |
-| **defer** | Valid but not now | Log for later |
-| **reject** | Disagree — must justify | User breaks the tie |
+| **defer** | Valid but not now | Needs your call, becomes an issue at finalize |
+| **reject** | Disagree — must justify | Needs your call, both arguments recorded |
 
-**What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — the primary driver critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored.
+**What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — the primary driver critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored. Because the loop never waits on you, it runs the same way in a terminal, a desktop app worktree, or a background session.
 
 ### `/multi-agent-plan-review` — Two-Agent Plan Review
 
-[`skills/multi-agent-plan-review.md`](skills/multi-agent-plan-review.md) | Requires: one primary driver; external reviewers optional
+[`skills/multi-agent-plan-review/SKILL.md`](skills/multi-agent-plan-review/SKILL.md) | Requires: one primary driver; external reviewers optional
 
-The primary driver sends a plan to available external reviewers. Each round: reviewer feedback arrives -> primary driver counter-reviews with dispositions -> you resolve disputes -> primary driver revises -> repeat. Min 2 rounds, max 5. Same counter-review and decision gate patterns as code review.
+The primary driver sends a plan to the cross-family reviewer. Each round: findings arrive as one JSON object -> primary driver counter-reviews with dispositions -> agreed items revise the plan -> the reviewer session is resumed to verify. Reject and defer go to Needs your call without stopping the loop. A round with nothing to revise converges; max 5 rounds. Same patterns as code review.
 
 **What makes it different:** Gets a second model's perspective on your architecture before you write any code. Catches blind spots that a single model misses.
 
 ### `/multi-agent-ideate` — Multi-Model Brainstorming Council
 
-[`skills/multi-agent-ideate.md`](skills/multi-agent-ideate.md) | Optional: Claude/Codex/Gemini reviewer channels
+[`skills/multi-agent-ideate/SKILL.md`](skills/multi-agent-ideate/SKILL.md) | Optional: Claude/Codex reviewer channels
 
-Claude, Codex, Gemini, and the primary driver can independently brainstorm on any topic — UI design, architecture, naming, API design, tradeoffs, or any open-ended question. The primary driver synthesizes the raw responses into a unified findings list, then available participants counter-review the synthesis. Final report shows consensus ideas, contested points, and unique insights ranked by confidence.
+Claude, Codex, and the primary driver can independently brainstorm on any topic — UI design, architecture, naming, API design, tradeoffs, or any open-ended question. The primary driver synthesizes the raw responses into a unified findings list, then available participants counter-review the synthesis. Final report shows consensus ideas, contested points, and unique insights ranked by confidence.
 
 **How it works:**
 
 1. **Capture brief** — topic, optional attachments (screenshots, code), focus areas, constraints
-2. **Parallel ideation** — all three models brainstorm independently (same brief, no cross-talk)
+2. **Parallel ideation** — every available participant brainstorms independently (same brief, no cross-talk)
 3. **Synthesis** — primary driver merges all responses, tags consensus level, preserves attribution
 4. **Counter-review** — each model dispositions the synthesis (endorse / challenge / enhance / new)
 5. **Final report** — consensus tiers, contested ideas with arguments from both sides, unique insights
 
-**What makes it different:** Three models with different training biases produce genuinely diverse perspectives. The counter-review catches over- and under-weighted ideas. Works with any subset of models — degrades gracefully to the primary driver alone.
+**What makes it different:** Two model families with different training biases produce genuinely diverse perspectives. The counter-review catches over- and under-weighted ideas. Works with any subset of models — degrades gracefully to the primary driver alone.
 
 ---
 
@@ -111,7 +106,7 @@ Three complementary skills covering different security angles — infrastructure
 
 ### `/security-posture` — Security Hygiene Scorecard
 
-[`skills/security-posture.md`](skills/security-posture.md) | Requires: git. Optional: gh
+[`skills/security-posture/SKILL.md`](skills/security-posture/SKILL.md) | Requires: git. Optional: gh
 
 Checks 16 security hygiene items across 6 categories: secrets management, dependency security, code quality gates, access control, container security, and infrastructure. Returns a letter-graded scorecard (A-F) with specific fix recommendations. No scanning tools needed — zero setup, instant results.
 
@@ -134,13 +129,13 @@ Checks 16 security hygiene items across 6 categories: secrets management, depend
 
 ### `/security-scan` — SAST, Dependencies, and Secrets
 
-[`skills/security-scan.md`](skills/security-scan.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
+[`skills/security-scan/SKILL.md`](skills/security-scan/SKILL.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
 
 Runs Semgrep (static analysis), `npm audit` (dependency vulnerabilities), and Gitleaks (secret detection). Auto-detects which tools are installed and runs only those. Outputs a consolidated report with findings by severity.
 
 ### `/security-audit` — AI-Driven Security Review
 
-[`skills/security-audit.md`](skills/security-audit.md) | Requires: git. Optional: Claude/Codex/Gemini reviewer channels
+[`skills/security-audit/SKILL.md`](skills/security-audit/SKILL.md) | Requires: git. Optional: Claude/Codex reviewer channels
 
 Deep security review using the primary driver, available native subagents, and optional external reviewers. All findings go through counter-review before action — same disposition system as peer review.
 
@@ -150,7 +145,7 @@ Deep security review using the primary driver, available native subagents, and o
 
 ### `/merge` — Squash-Merge with Auto-Documentation
 
-[`skills/merge.md`](skills/merge.md) | Requires: git + (gh or GitHub MCP)
+[`skills/merge/SKILL.md`](skills/merge/SKILL.md) | Requires: git + (gh or GitHub MCP)
 
 Squash-merges the current PR, switches to the target branch, then auto-updates README, CHANGELOG, and CLAUDE.md to reflect the completed work. Includes preflight checks and evidence-based branch cleanup.
 
@@ -198,7 +193,11 @@ See the [tool README](tools/codex-setup-sync/README.md) for the config schema, s
 
 ## Agents
 
-Background sub-agents for runtimes that support native subagent dispatch. Claude-compatible agent files are included today; Codex equivalents are documented as runtime prompts in this pass rather than generated as separate files.
+Background sub-agents for runtimes that support native subagent dispatch. Claude-compatible agent files are included today; Codex runs the same prompts as primary-native passes.
+
+### Review Lenses
+
+[`agents/code-reviewer.md`](agents/code-reviewer.md), [`agents/silent-failure-hunter.md`](agents/silent-failure-hunter.md), [`agents/type-design-analyzer.md`](agents/type-design-analyzer.md) — Read-only review lenses used by `/multi-agent-code-review` and `/security-audit`. Correctness and security, silent failures and fail-open paths, and type soundness and design. Each takes its scope, severity scale, and output format from the task prompt.
 
 ### Codebase Snapshot
 
@@ -210,117 +209,56 @@ Background sub-agents for runtimes that support native subagent dispatch. Claude
 
 ## Install
 
-### Claude Code Quick Install (macOS / Linux)
+This repo is a plugin for both Claude Code and Codex. Install it once per machine and every project on that machine gets the skills, including git worktrees and the Codex desktop app. Each skill lives at `skills/<name>/SKILL.md` and follows the [Agent Skills](https://agentskills.io/specification) format.
+
+### Claude Code
 
 ```bash
-git clone https://github.com/anbuneel/agentic-engineering.git
-mkdir -p ~/.claude/commands ~/.claude/agents
-cp agentic-engineering/skills/*.md ~/.claude/commands/
-cp agentic-engineering/agents/*.md ~/.claude/agents/
+claude plugin marketplace add anbuneel/agentic-engineering
+claude plugin install ae@agentic-engineering
 ```
 
-**Want auto-sync?** Use links so edits in either location stay in sync:
+Plugin skills are namespaced, so invoke them as `/ae:multi-agent-code-review`, `/ae:merge`, and so on. The agents under `agents/` install with the plugin.
 
-```bash
-git clone https://github.com/anbuneel/agentic-engineering.git
-mkdir -p ~/.claude/commands ~/.claude/agents
-ln agentic-engineering/skills/*.md ~/.claude/commands/
-ln agentic-engineering/agents/*.md ~/.claude/agents/
-```
-
-Invoke with `/multi-agent-code-review`.
-
-### Claude Code Quick Install (Windows)
-
-```powershell
-git clone https://github.com/anbuneel/agentic-engineering.git
-Copy-Item agentic-engineering\skills\*.md ~\.claude\commands\
-Copy-Item agentic-engineering\agents\*.md ~\.claude\agents\
-```
-
-**Want auto-sync?** Use symbolic links. Windows hard links only work when the repo and target directory are on the same drive; symlinks work across drives but require Developer Mode or an elevated shell.
-
-```powershell
-git clone https://github.com/anbuneel/agentic-engineering.git
-Get-ChildItem agentic-engineering\skills\*.md | ForEach-Object { New-Item -ItemType SymbolicLink -Path "~\.claude\commands\$($_.Name)" -Target $_.FullName }
-Get-ChildItem agentic-engineering\agents\*.md | ForEach-Object { New-Item -ItemType SymbolicLink -Path "~\.claude\agents\$($_.Name)" -Target $_.FullName }
-```
-
-### Codex Quick Install
-
-Codex skills use `SKILL.md` inside a skill directory. For this core docs pass, keep this repo as the canonical source and install symlinks manually, through your existing Codex setup sync workflow, or with the included installer script.
-
-Recommended layout:
-
-```text
-~/.codex/skills/
-  multi-agent-code-review/SKILL.md
-  multi-agent-plan-review/SKILL.md
-  multi-agent-ideate/SKILL.md
-  merge/SKILL.md
-  security-scan/SKILL.md
-  security-audit/SKILL.md
-  security-posture/SKILL.md
-```
-
-Some Codex installations also load shared skills from `~/.agents/skills/`; the installer can target that layout too.
-
-```powershell
-.\scripts\install-skill-links.ps1 -Targets Codex
-```
-
-Use `-Targets Agents` for `~/.agents/skills/`, or `-Targets Claude,Codex` to link both Claude Code and Codex. The script uses symbolic links by default and falls back to copies only when symlink creation is not permitted.
-
-Invoke from Codex with `$multi-agent-code-review` or select the skill through `/skills`. Codex plugin packaging and generated install bundles are intentionally out of scope for this pass.
-
-### Detect Skill Sync Drift
-
-Links break when tools recreate files instead of editing in place, and a plain copy goes stale the moment the repo changes. `scripts/check-skill-sync.sh` checks **every** install root this repo can target — Claude Code commands and agents, `$CODEX_HOME/skills`, and `~/.agents/skills` — because a current symlink in one runtime hides a months-old copy in another. Add a `SessionStart` hook to `~/.claude/settings.json` to get warned at the start of every Claude Code session:
+**Cloud sessions** never read your user-level plugins. Commit this to a project's `.claude/settings.json` and cloud sessions install the plugin when they start:
 
 ```json
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"<path-to-repo>/scripts/check-skill-sync.sh\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
+  "extraKnownMarketplaces": {
+    "agentic-engineering": {
+      "source": { "source": "github", "repo": "anbuneel/agentic-engineering" }
+    }
+  },
+  "enabledPlugins": {
+    "ae@agentic-engineering": true
   }
 }
 ```
 
-The script silently exits if the repo directory doesn't exist, so it's safe to add globally. It reports a root only when that root is in use — it exists and already holds at least one skill from this repo — so installing for one runtime never produces warnings about the others. Only tracked files count as shipped skills, so a work-in-progress file in `skills/` is not reported as missing everywhere.
-
-### Install Individual Files (Claude Code)
+### Codex
 
 ```bash
-# Skills
-curl -o ~/.claude/commands/multi-agent-code-review.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-code-review.md
-curl -o ~/.claude/commands/multi-agent-plan-review.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-plan-review.md
-curl -o ~/.claude/commands/multi-agent-ideate.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/multi-agent-ideate.md
-curl -o ~/.claude/commands/merge.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/merge.md
-curl -o ~/.claude/commands/security-scan.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-scan.md
-curl -o ~/.claude/commands/security-audit.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-audit.md
-curl -o ~/.claude/commands/security-posture.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/skills/security-posture.md
-
-# Agents
-curl --create-dirs -o ~/.claude/agents/codebase-snapshot.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/codebase-snapshot.md
-curl --create-dirs -o ~/.claude/agents/code-cleanup-analyst.md https://raw.githubusercontent.com/anbuneel/agentic-engineering/main/agents/code-cleanup-analyst.md
+codex plugin marketplace add anbuneel/agentic-engineering
+codex plugin add ae@agentic-engineering
 ```
 
-For Codex, install each skill as a directory with `SKILL.md`; generated Codex install commands are intentionally out of scope for this pass.
+Invoke with `$multi-agent-code-review` or pick the skill from `/skills`. The desktop app and its worktrees share this install. Codex cloud does not load plugins; to use these skills there, copy the `skills/<name>/` directories you need into that repository's `.agents/skills/`.
+
+### Update
+
+Both tools install a snapshot and refresh it when the plugin version changes. To release: bump with `.\scripts\Set-PluginVersion.ps1 -Version x.y.z`, commit, then run `claude plugin update ae@agentic-engineering` or `codex plugin marketplace upgrade` on each machine.
+
+### Develop Locally
+
+`claude --plugin-dir <path-to-repo>` loads the working tree directly, and `/reload-plugins` picks up edits. For Codex, register the checkout as a local marketplace with `codex plugin marketplace add <path-to-repo>` and then `codex plugin add ae@agentic-engineering`.
+
+Run `claude plugin validate <path-to-repo>` before opening a PR. It checks the plugin and marketplace manifests, every `SKILL.md`, and the agent frontmatter.
 
 ### Using with Other AI Tools
 
-These are markdown files — any AI agent that can read instructions, inspect/edit files, and execute shell commands can use them. The skills now define neutral actions and runtime adapters instead of requiring one tool vocabulary.
+These are markdown files — any AI agent that can read instructions, inspect/edit files, and execute shell commands can use them. The skills define neutral actions and runtime adapters instead of requiring one tool vocabulary. Any tool that reads the Agent Skills layout can load `skills/<name>/SKILL.md` directly.
 
-**Verify your installation:** Run `/security-posture` in any git repo. If you see a scorecard, you're set.
+**Verify your installation:** Run `/ae:security-posture` (Claude Code) or `$security-posture` (Codex) in any git repo. If you see a scorecard, you're set.
 
 ## Tool Setup
 
@@ -335,36 +273,24 @@ These are markdown files — any AI agent that can read instructions, inspect/ed
 | [GitHub CLI (`gh`)](https://cli.github.com/) | `brew install gh` then `gh auth login` | `/multi-agent-code-review`, `/merge` (gh or GitHub MCP), `/security-posture` (optional) |
 | [Claude Code](https://claude.ai/code) | Follow Claude Code docs | Primary driver or external reviewer channel |
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | Primary driver or external reviewer channel |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` | Multi-agent workflows (optional) |
 | [Semgrep](https://semgrep.dev/) | `pip install semgrep` | `/security-scan` (optional) |
 | [Gitleaks](https://github.com/gitleaks/gitleaks) | `brew install gitleaks` | `/security-scan` (optional) |
 
 **Runtime detection:** Skills set `PRIMARY_DRIVER` from the active runtime. Claude Code command contexts use `claude-code`; Codex desktop contexts use `codex-app`; `codex exec` contexts use `codex-cli`; ambiguous runtimes use `unknown` and fall back to neutral capabilities unless behavior would materially differ.
 
-**Effort configuration:** Skills accept `effort=<fast|balanced|deep>` as cross-agent intent. Claude Code also keeps the compatibility option `model=<sonnet|opus|haiku>` for Claude-native subagent dispatch.
+**Models and effort:** Every driver inherits the model you configured: Claude Code's settings for Claude, `~/.codex/config.toml` for Codex. The skills never pick a model tier. `effort=<fast|balanced|deep>` maps to reasoning effort only:
 
-| Effort | Claude-native / Claude CLI | Codex CLI | Intended use |
-|--------|-----------------------------|-----------|--------------|
-| `fast` | Prefer Haiku when selecting a Claude model; pass `--effort low` when supported | Prefer inherited config; optional `-c model_reasoning_effort="low"` | Quick pass |
-| `balanced` | Prefer Sonnet when selecting a Claude model; pass `--effort medium` when supported | Prefer inherited config; optional `-c model_reasoning_effort="medium"` | Default |
-| `deep` | Prefer Opus when selecting a Claude model and cost is acceptable; pass `--effort high` when supported | Prefer inherited config; optional `-c model_reasoning_effort="high"` | High-stakes review |
+| Effort | Claude CLI and subagents | Codex CLI | Intended use |
+|--------|--------------------------|-----------|--------------|
+| `fast` | inherit model, `--effort low` | `-c model_reasoning_effort="low"` | Quick pass |
+| `balanced` | inherit model and configured effort | inherit both | Default |
+| `deep` | inherit model, `--effort xhigh` | `-c model_reasoning_effort="xhigh"` | High-stakes review |
 
-`model=<sonnet|opus|haiku>` overrides only Claude model selection. Codex model selection is inherited from `~/.codex/config.toml`; the skills do not hardcode Codex `-m`.
+`model=<fable|opus|sonnet|haiku>` overrides the Claude model only. `budget=<usd>` caps each Claude reviewer run with `--max-budget-usd`; there is no cap by default, and a headless Claude run costs roughly 0.3 to 0.7 USD before any review work, so caps under 2 USD abort early.
 
-**Codex configuration:** Model and reasoning effort are inherited from `~/.codex/config.toml` — the skills do not hardcode a model:
+**Reviewer contracts:** Each multi-agent skill ships `references/reviewer-contracts.md` and `references/findings-schema.md`. The Claude channel runs `claude -p` with `--permission-mode plan --permission-prompts none`, a read-only tool list, `--output-format json`, and `--json-schema`; the Codex channel runs `codex exec --json -s read-only -C <root> --output-schema <file> -o <file>`. Both return one findings object per round, both sessions are resumed across rounds, and the primary driver counter-reviews every finding regardless of the reviewer's verdict.
 
-```toml
-model = "your-preferred-model"
-model_reasoning_effort = "high"
-```
-
-**Claude reviewer channel:** When Codex is primary, multi-agent workflows can call Claude CLI as an independent reviewer:
-
-```bash
-claude -p "<review prompt>. Do not modify files. End with exactly: VERDICT: APPROVED or VERDICT: REVISE" --permission-mode plan --allowedTools "Read" "Grep" "Glob" --disallowedTools "Edit" "Write" "MultiEdit" --output-format json
-```
-
-The skill launches Claude CLI with command cwd set to `PROJECT_ROOT`, parses `session_id` from Claude's JSON output, stores it as `externalThreadIds.claude`, writes `result` to `.review/`, and resumes later rounds with `--resume`. Claude has no `-C` equivalent, so runtimes that cannot set command cwd should add `--add-dir "${PROJECT_ROOT}"` and include the repo root in the prompt.
+**Review lenses:** Three read-only agents install with the plugin and run in parallel as independent lenses: `code-reviewer`, `silent-failure-hunter`, and `type-design-analyzer`. Under Codex they run as primary-native passes unless Codex custom agents are configured.
 
 **GitHub App Reviewers (optional):** `/multi-agent-code-review` can collect reviews from GitHub-based AI bots regardless of whether Claude or Codex is the primary driver. These are entirely optional — the skill works without them, but each one adds an independent perspective.
 
@@ -380,7 +306,7 @@ After installing, the skill automatically detects bot reviews on your PR and inc
 
 Agent runtimes may prompt for approval on shell commands. These skills make heavy use of `git`, `gh`, external reviewer CLIs, and scanning tools. Configure permissions according to your primary driver.
 
-When Codex is primary, external reviewer subprocesses (`claude`, `gemini`, and optional secondary `codex`) need sandbox and approval settings that allow launching those CLIs and using their network-backed model sessions. If a reviewer is policy-blocked, the skill records it as skipped and continues unless you explicitly required that reviewer.
+When Codex is primary, external reviewer subprocesses (`claude` and optional secondary `codex`) need sandbox and approval settings that allow launching those CLIs and using their network-backed model sessions. If a reviewer is policy-blocked, the skill records it as skipped and continues unless you explicitly required that reviewer.
 
 **Claude Code recommended:** Add these to your `~/.claude/settings.json` to allow skill-related commands:
 
@@ -392,11 +318,9 @@ When Codex is primary, external reviewer subprocesses (`claude`, `gemini`, and o
       "Bash(gh *)",
       "Bash(claude *)",
       "Bash(codex *)",
-      "Bash(gemini *)",
       "Bash(npm audit *)",
       "Bash(semgrep *)",
-      "Bash(gitleaks *)",
-      "Bash(rm -rf .review/*)"
+      "Bash(gitleaks *)"
     ]
   }
 }
@@ -411,11 +335,11 @@ When Codex is primary, external reviewer subprocesses (`claude`, `gemini`, and o
 | GitHub MCP tools | `/merge` | Fallback for `gh` in remote containers that ship without the CLI |
 | `Bash(claude *)` | multi-agent workflows when Codex is primary | Claude reviewer channel |
 | `Bash(codex *)` | multi-agent workflows when Codex is external or secondary | Codex CLI exec and resume commands |
-| `Bash(gemini *)` | `/multi-agent-ideate` | Gemini CLI non-interactive prompts |
 | `Bash(npm audit *)` | `/security-scan` | Dependency vulnerability scanning |
 | `Bash(semgrep *)` | `/security-scan` | Static analysis |
 | `Bash(gitleaks *)` | `/security-scan` | Secret detection |
-| `Bash(rm -rf .review/*)` | All skills | Cleanup of temporary review files |
+
+Skills leave `.review/` in place; it is gitignored and every file carries the run id, so no delete permission is needed.
 
 You only need permissions for tools you have installed. If you don't use a reviewer channel, skip its permission. If you don't run `/security-scan`, skip the scanning tool permissions.
 

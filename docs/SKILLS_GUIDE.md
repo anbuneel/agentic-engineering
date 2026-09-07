@@ -16,85 +16,73 @@ Visual flow diagrams for every shipped skill in the Agentic Engineering toolkit.
 
 Multi-agent skills use a runtime adapter and reviewer registry instead of assuming one primary agent. The primary driver is detected as `claude-code`, `codex-app`, `codex-cli`, or `unknown`. Reviewers are classified as primary-native, native subagents, external CLI reviewers, GitHub review agents, skipped, or secondary same-family.
 
-External reviewers are advisory by default. A reviewer becomes required only when the user explicitly requests it; skipped advisory reviewers reduce confidence but do not block convergence. When Codex is primary, Claude CLI reviewers run with `--permission-mode plan`, explicit read-only `--allowedTools`, edit/write-denying `--disallowedTools`, and `--output-format json`; they store `externalThreadIds.claude` and resume with `--resume` where the workflow has multiple rounds. Launch Claude CLI from `PROJECT_ROOT` because Claude has no Codex-style `-C` flag.
+External reviewers are advisory by default. A reviewer becomes required only when the user explicitly requests it; skipped advisory reviewers reduce confidence but do not block convergence. Reviewer channels are Claude and Codex. Each multi-agent skill carries `references/reviewer-contracts.md` (commands, flags, resume, failure handling, effort mapping) and, where findings are structured, `references/findings-schema.md` (one JSON object per reviewer per round, enforced with `--json-schema` on Claude and `--output-schema` on Codex). Three read-only lens agents ship with the plugin: `code-reviewer`, `silent-failure-hunter`, `type-design-analyzer`.
 
 ---
 
 ## `/multi-agent-code-review` — Multi-Agent Code Review
 
-Multi-round review across the primary driver, native subagents, external CLI reviewers, and GitHub review agents with counter-review, decision gates, and convergence tracking. Min 2 rounds, max 5.
+Review across the primary driver, three lens agents, the cross-family CLI reviewer, and GitHub review agents, with counter-review on every finding and convergence tracking. Round 1 fans out to everyone; verification rounds run only after fixes and only for the reviewers whose findings were acted on. A clean round 1 converges. Max 5 rounds. The loop never blocks on the user.
 
 ```mermaid
 graph TD
-    A[Preflight] --> B{Diff < 20 lines?}
-    B -- Yes --> D[Pre-Review]
-    B -- No --> C["Simplification Pass"]
-    C --> D
+    A["Preflight: clean tree, base branch,\nquality gates, schema, rebase once, PR"] --> B[Round 1: fan out]
 
-    D --> D0[Primary-Native Review]
-    D --> D1[Native Code Reviewer]
-    D --> D2[Native Silent-Failure Hunter]
-    D --> D3[Native Type/Design Analyzer]
-    D0 & D1 & D2 & D3 --> E[Counter-Review + Decision Gate]
-    E --> F[Fix + Quality Gates + Commit]
-    F --> G[Create PR + Push]
+    B --> B0[Primary-Native Review]
+    B --> B1[code-reviewer lens]
+    B --> B2[silent-failure-hunter lens]
+    B --> B3[type-design-analyzer lens]
+    B --> B4["Cross-family CLI reviewer\n(Codex under Claude, Claude under Codex)"]
+    B --> B5["GH review agents\n(poll up to 8 min)"]
+    B0 & B1 & B2 & B3 & B4 & B5 --> C["Consolidate on fingerprint\n+ GH finding verification"]
+    C --> D[Counter-Review]
+    D --> D1["reject / defer → Needs your call\n(recorded, not blocking)"]
+    D --> E{Converged?}
+    E -- "Fixes this round" --> F["Fix MUST_FIX, gates, commit\nFix SHOULD_FIX, gates, commit"]
+    F --> G[Push + round summary comment]
+    G --> H["Verification round:\nresume only reviewers whose\nfindings were acted on;\npoll bots only after a push"]
+    H --> C
 
-    G --> H[Round N]
-
-    subgraph "Review Loop (2-5 rounds)"
-        H --> I[External CLI Reviewers]
-        H --> J["Common GH Agents\n(Claude, Codex GH, Devin, future bots)"]
-        I & J --> K[Sync Point]
-        K --> L["Consolidate + GH Agent Verification\n(fingerprint cross-check)"]
-        L --> M[Counter-Review + Decision Gate]
-        M --> N{Converged?}
-        N -- "No (fixes needed)" --> O[Fix + Quality Gates + Commit]
-        O --> P[Push]
-        P --> H
-    end
-
-    N -- Yes --> Q[Finalize]
-    Q --> R[Deferred Items → GH Issues]
-    Q --> S[Update PR Description]
-    Q --> T[Write Review Artifact]
+    E -- "No fixes, bots verified" --> I[Finalize]
+    I --> J[Needs your call presented]
+    I --> K[Deferred Items → GH Issues]
+    I --> L[PR description + final comment]
+    I --> M[Review artifact]
 ```
 
-> **Requires:** git, gh. Optional: native subagents, Claude/Codex/Gemini CLI reviewers, GitHub bot apps (Claude, Devin, Codex GH)
+> **Requires:** git, gh. Optional: Claude or Codex CLI as the cross-family reviewer, GitHub bot apps (Claude, Devin, Codex GH)
 >
-> **Options:** `effort=<fast|balanced|deep>` — cross-agent effort intent. Claude Code also supports `model=<sonnet|opus|haiku>` for compatibility.
+> **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`, `decisions=<deferred|interactive>` (default deferred), `require=<reviewer>`
 >
 > **Output:** `docs/reviews/code-review-{id}.md`
 >
-> **Key features:** Dynamic reviewer registry, common GH agent polling, concrete Claude CLI reviewer channel when Codex is primary, GH finding verification via cross-round fingerprinting, MUST FIX committed before SHOULD FIX (safe rollback)
+> **Key features:** Fan out once and verify narrowly, findings as one JSON object per reviewer, reject and defer recorded with both arguments instead of blocking, GH finding verification via cross-round fingerprinting, quality gates from the project's `CLAUDE.md`/`AGENTS.md` or detected from build files, MUST_FIX committed before SHOULD_FIX (safe rollback)
 
 ---
 
 ## `/multi-agent-plan-review` — Two-Agent Plan Review
 
-The primary driver sends a plan document to available external reviewers. Each round: reviewers critique, primary driver counter-reviews with dispositions, user resolves disputes, primary driver revises. Min 2 rounds, max 5.
+The primary driver sends a plan document to the cross-family reviewer. Each round: the reviewer returns a findings object, the primary driver counter-reviews with dispositions, agreed items revise the plan, and the reviewer session is resumed to verify. Reject and defer are recorded under Needs your call; the loop never waits. A round with nothing to revise converges. Max 5 rounds.
 
 ```mermaid
 graph TD
-    A[Setup + Read Plan] --> B[External Reviewer Pass]
-    B --> C{Verdict?}
-
-    C -- "REVISE (or Round < 2)" --> D[Counter-Review]
-    D --> E{Reject or Defer?}
-    E -- Yes --> F[Decision Gate: User Breaks Tie]
-    E -- No --> G[Revise Plan]
-    F --> G
-    G --> H["Resume Reviewer Sessions\n(where supported)"]
-    H --> C
-
-    C -- "APPROVED (Round ≥ 2)" --> I[Write Review Artifact]
-    C -- "Max Rounds (5)" --> I
+    A[Setup + Read Plan + Schema] --> B[Reviewer Pass: findings object]
+    B --> C[Counter-Review]
+    C --> C1["reject / defer → Needs your call\n(recorded, not blocking)"]
+    C --> D{Revisions this round?}
+    D -- Yes --> E[Revise Plan]
+    E --> F[Resume Reviewer Session]
+    F --> B
+    D -- "No (or max rounds)" --> G[Write Review Artifact]
 ```
 
-> **Requires:** primary driver. Optional: Claude/Codex/Gemini reviewer channels
+> **Requires:** primary driver. Optional: Claude or Codex CLI as the cross-family reviewer
+>
+> **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`, `decisions=<deferred|interactive>` (default deferred), `require=<reviewer>`
 >
 > **Output:** `docs/reviews/plan-review-{id}.md`
 >
-> **Key features:** reviewer session resume where supported, full audit trail of every finding + disposition + revision
+> **Key features:** reviewer session resume, findings as one JSON object per round, Needs your call instead of a blocking gate, full audit trail of every finding + disposition + revision
 
 ---
 
@@ -109,9 +97,8 @@ graph TD
     B --> C[Primary Driver]
     B --> D["Claude Reviewer (optional)"]
     B --> E["Codex Reviewer (optional)"]
-    B --> F["Gemini Reviewer (optional)"]
 
-    C & D & E & F --> G[Primary Driver Synthesizes]
+    C & D & E --> G[Primary Driver Synthesizes]
     G --> H[Counter-Review]
 
     H --> I["External Participants:\nendorse / challenge / enhance / new"]
@@ -122,12 +109,12 @@ graph TD
 
     M -- Pick Ideas --> N[Act on Selected]
     M -- Go Deeper --> B
-    M -- Export --> O[Save + Cleanup]
+    M -- Export --> O[Save Report]
 ```
 
-> **Requires:** primary driver. Optional: Claude/Codex/Gemini reviewer channels
+> **Requires:** primary driver. Optional: Claude/Codex reviewer channels
 >
-> **Options:** `effort=<fast|balanced|deep>`, plus Claude `model=<sonnet|opus|haiku>` compatibility
+> **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`
 >
 > **Output:** `{review-dir}/report-{id}.md`
 >
@@ -211,11 +198,11 @@ Full-codebase security analysis using primary-native analysis, available native 
 graph TD
     A[Preflight + Detect Project Type] --> B[Parallel AI Analysis]
 
-    B --> C[Native Code/Security Reviewer\nInjection, auth, data exposure]
-    B --> D[Native Silent-Failure Hunter\nFail-open, swallowed exceptions]
-    B --> E[Native Type/Design Analyzer\nType coercion, unsafe casts]
+    B --> C[code-reviewer lens\nInjection, auth, data exposure]
+    B --> D[silent-failure-hunter lens\nFail-open, swallowed exceptions]
+    B --> E[type-design-analyzer lens\nType coercion, unsafe casts]
     B --> F[Primary-Native\nOWASP Top 10 mapping]
-    B --> G["External Reviewers\nClaude / Codex / Gemini"]
+    B --> G["External Reviewers\nClaude / Codex"]
 
     C & D & E & F & G --> H[Deduplicate Findings]
     H --> I[Counter-Review]
@@ -227,9 +214,9 @@ graph TD
     L --> M["docs/analysis/security-audit-{id}.md"]
 ```
 
-> **Requires:** git. Optional: Claude/Codex/Gemini reviewer channels
+> **Requires:** git. Optional: Claude/Codex reviewer channels
 >
-> **Options:** `effort=<fast|balanced|deep>`, plus Claude `model=<sonnet|opus|haiku>` compatibility
+> **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`
 >
 > **Output:** `docs/analysis/security-audit-{id}.md`
 >
@@ -276,16 +263,17 @@ graph LR
         CR2 --> CR3[agree / partial / defer / reject]
     end
 
-    subgraph "Decision Gate"
-        DG1[reject or defer] --> DG2[Present Both Sides]
-        DG2 --> DG3[User Breaks Tie]
+    subgraph "Needs Your Call"
+        DG1[reject or defer] --> DG2[Record Both Sides]
+        DG2 --> DG3[Presented at the End]
     end
 
     subgraph "Convergence Loop"
         CL1[Review] --> CL2[Fix]
-        CL2 --> CL3{All Resolved?\nMin 2 rounds}
-        CL3 -- No --> CL1
-        CL3 -- Yes --> CL4[Done]
+        CL2 --> CL3{Fixes this round?}
+        CL3 -- Yes --> CL5[Verify with the reviewers involved]
+        CL5 --> CL3
+        CL3 -- No --> CL4[Done]
     end
 
     subgraph "State Persistence"
@@ -297,6 +285,6 @@ graph LR
 | Pattern | Used By | Purpose |
 |---------|---------|---------|
 | Counter-review | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Primary driver critically evaluates findings instead of blindly accepting |
-| Decision gate | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | Human-in-the-loop only on disagreements |
-| Convergence loop | `/multi-agent-code-review`, `/multi-agent-plan-review` | Can't exit until fixes are verified clean |
+| Needs your call | `/multi-agent-code-review`, `/multi-agent-plan-review` (`/security-audit` keeps its pre-report decision gate) | Disagreements recorded with both arguments and surfaced at the end; the loop never waits |
+| Convergence loop | `/multi-agent-code-review`, `/multi-agent-plan-review` | Every round that fixes something is followed by a verification round |
 | State persistence | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/security-audit` | JSON state file survives context window compaction |

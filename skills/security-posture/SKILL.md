@@ -395,7 +395,7 @@ Write the report to `${PROJECT_ROOT}/docs/analysis/security-posture-${SCAN_ID}.m
 
 ---
 
-## Phase 5: Cleanup & Present
+## Phase 5: Present
 
 Present to the user:
 

@@ -21,25 +21,19 @@ Gather independent perspectives from available model reviewers on any topic — 
 
 ## Prerequisites
 
-Requires at least the primary driver. Codex CLI, Claude reviewer channel, and Gemini CLI add council participants when configured. Skill degrades gracefully and works with any subset of models.
+Requires at least the primary driver. Codex CLI (under Claude primary) or the Claude reviewer channel (under Codex primary) adds the cross-family council participant when configured. Skill degrades gracefully and works with any subset of models.
 
 ---
 
 ## Options
 
-Use `effort=<fast|balanced|deep>` as the cross-agent option. Map it to the runtime's native model or reasoning controls where available. Default to `balanced`.
+- `effort=<fast|balanced|deep>` — default `balanced`. Maps to reasoning effort only; every driver inherits the user's configured model.
+- `model=<fable|opus|sonnet|haiku>` — Claude model override for native subagents and the Claude participant.
+- `budget=<usd>` — per-run `--max-budget-usd` for the Claude participant. No cap by default.
 
-Claude Code compatibility: also accept `model=<sonnet|opus|haiku>` for Claude-native Task dispatch. If present, store it as `CLAUDE_SUB_AGENT_MODEL`; otherwise choose the runtime default for the selected effort. Print the selected effort and any driver-specific model override.
+The mapping table, override rules, and cost notes are in [references/reviewer-contracts.md](references/reviewer-contracts.md). Print the resolved effort, model override, and budget at startup.
 
-Effort mapping:
-
-| Effort | Claude-native / Claude CLI | Codex CLI | Reviewer timeouts |
-|--------|-----------------------------|-----------|-------------------|
-| `fast` | Prefer Haiku when selecting a Claude model; pass `--effort low` when supported | Prefer inherited `~/.codex/config.toml`; if overriding effort, use `-c model_reasoning_effort="low"` | Shortest |
-| `balanced` | Prefer Sonnet when selecting a Claude model; pass `--effort medium` when supported | Prefer inherited config; if overriding effort, use `-c model_reasoning_effort="medium"` | Default |
-| `deep` | Prefer Opus when selecting a Claude model and the user accepts cost; pass `--effort high` when supported | Prefer inherited config; if overriding effort, use `-c model_reasoning_effort="high"` | Longest |
-
-`model=<sonnet|opus|haiku>` overrides only Claude model selection. Do not hardcode a Codex model with `-m`; Codex model selection is inherited unless the user explicitly requests otherwise.
+External participants use the commands in that file without a findings schema: ideation and counter-review are free text, so Codex gets `-o` with a `.md` path and no `--output-schema`, and Claude's answer is read from `result`.
 
 ---
 
@@ -61,11 +55,11 @@ Detect `PRIMARY_DRIVER` from the active runtime:
 
 Participant defaults:
 
-- Claude primary: primary-native Claude plus Codex CLI and Gemini CLI when available. Skip a separate Claude CLI participant by default because it is same-family unless the user explicitly requests it.
-- Codex primary: primary-native Codex plus Claude reviewer channel and Gemini CLI when available. A secondary Codex CLI session is allowed only as `secondary same-family review` and is skipped by default unless explicitly requested.
+- Claude primary: primary-native Claude plus Codex CLI when available. Skip a separate Claude CLI participant by default because it is same-family unless the user explicitly requests it.
+- Codex primary: primary-native Codex plus the Claude reviewer channel when available. A secondary Codex CLI session is allowed only as `secondary same-family review` and is skipped by default unless explicitly requested.
 - GitHub review agents are not required for ideation, but if the brief is PR-specific, include relevant GitHub bot feedback as context.
 
-When Codex is the primary driver, external participant subprocesses (`claude`, `gemini`, and optional secondary `codex`) require sandbox and approval settings that permit launching those commands and using their network-backed model sessions. If a subprocess is blocked by policy, mark that participant as skipped and continue.
+When Codex is the primary driver, external participant subprocesses (`claude` and optional secondary `codex`) require sandbox and approval settings that permit launching those commands and using their network-backed model sessions. If a subprocess is blocked by policy, mark that participant as skipped and continue.
 
 ---
 
@@ -94,22 +88,18 @@ codex --version
 ```bash
 claude --version
 ```
-```bash
-gemini --version
-```
 
-Set `HAS_CODEX`, `HAS_CLAUDE_REVIEWER`, and `HAS_GEMINI` to true/false based on the primary driver and configured reviewer channels. If unavailable, warn but continue:
+Set `HAS_CODEX` and `HAS_CLAUDE_REVIEWER` to true/false based on the primary driver and configured reviewer channels. If unavailable, warn but continue:
 - Codex missing → "Codex CLI not found. Install: `npm install -g @openai/codex`"
 - Claude reviewer missing while Codex is primary → "Claude reviewer channel not found. Continuing without Claude as a council participant."
-- Gemini missing → "Gemini CLI not found. Install: `npm install -g @google/gemini-cli`"
 
-Minimum requirement: primary driver alone. Warn the user if fewer than 3 participants are available.
+Minimum requirement: primary driver alone. Warn the user if no cross-family participant is available, since the council then has a single model family.
 
 Generate a random 8-character hex string natively (not Bash). Store as `SESSION_ID`.
 
 Set `IDEATION_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the primary driver's file-write capability writes the first file into it — do NOT use `mkdir`.
 
-Initialize state file `${IDEATION_DIR}/ideation-state-${SESSION_ID}.json` tracking: `sessionId`, `primaryDriver`, `councilRegistry`, `projectRoot`, `ideationDir`, `externalThreadIds`, `hasCodex`, `hasClaudeReviewer`, `hasGemini`, `deepenRound` (starts at 0), `attachmentPaths`.
+Initialize state file `${IDEATION_DIR}/ideation-state-${SESSION_ID}.json` tracking: `sessionId`, `primaryDriver`, `councilRegistry`, `projectRoot`, `ideationDir`, `externalThreadIds`, `hasCodex`, `hasClaudeReviewer`, `deepenRound` (starts at 0), `attachmentPaths`.
 
 **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth. Always re-read it before acting.**
 
@@ -171,32 +161,14 @@ Run all available participants **in parallel**:
 - Optionally add a specialized native Claude subagent as an additional lens, not as an independent external reviewer. For UI/UX topics, use `frontend-design` if available; otherwise use a general native subagent or run the same prompt as a primary-native design lens and record the fallback.
 - For non-UI topics, use a general-purpose native subagent only when it adds a distinct lens; otherwise skip a redundant second Claude voice.
 
-**Claude reviewer channel under Codex/other primary** (if available):
-- Use Claude CLI as the independent Claude participant. Launch it with the shell command working directory set to `PROJECT_ROOT`; do not use `cd`. If the runtime cannot set cwd directly, add `--add-dir "${PROJECT_ROOT}"` and include `PROJECT_ROOT` in the prompt.
-  ```bash
-  claude -p "Repository root: ${PROJECT_ROOT}. [base prompt]. Read and analyze the following files if accessible: [absolute path for each attachment]. Do not modify files." --permission-mode plan --allowedTools "Read" "Grep" "Glob" --disallowedTools "Edit" "Write" "MultiEdit" --output-format json
-  ```
-- If `model=<sonnet|opus|haiku>` or an effort mapping selects a Claude model, add the matching Claude `--model` option. If effort is configured and the installed Claude CLI supports it, add `--effort low|medium|high`.
-- Parse the Claude JSON natively. Store `session_id` as `externalThreadIds.claude`, extract `result`, and write it to `${IDEATION_DIR}/claude-ideation-${SESSION_ID}.md`.
-- Include each attachment path with an explicit instruction: "Use your file-reading capability to view the file at [absolute path]" for reviewers that can access files directly.
+**Claude participant under Codex primary** (if `HAS_CLAUDE_REVIEWER`):
+- Run the Claude round-1 command from [references/reviewer-contracts.md](references/reviewer-contracts.md) with this prompt: "Repository root: ${PROJECT_ROOT}. [base prompt]. Use your file-reading capability to read and analyze each of these files: [absolute path for each attachment]. Do not modify files."
+- Store `session_id` as `externalThreadIds.claude`, extract `result`, and write it to `${IDEATION_DIR}/claude-ideation-${SESSION_ID}.md`.
 
-**Codex** (if `HAS_CODEX`):
-- Codex can read project files via its internal tools. Include the **absolute file paths** in the prompt and instruct: "Read and analyze the file at [path]"
-- Codex has limited image interpretation in headless mode — for image attachments, still include the path but note that Codex may not be able to render images visually
+**Codex participant under Claude primary** (if `HAS_CODEX`):
+- Run the Codex round-1 command from the contracts with `-o "${IDEATION_DIR}/codex-ideation-${SESSION_ID}.md"` and no `--output-schema`, with this prompt: "[base prompt]. Read and analyze the following files: [absolute path for each attachment]. Do not modify files."
+- Store `thread_id` as `externalThreadIds.codex`. Codex reads project files with its own tools; for image attachments include the path but note that headless Codex may not render images.
 - If Codex is primary, skip this participant by default unless the user explicitly requested a secondary Codex perspective; if run, mark it `secondary same-family review`.
-```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" "[base prompt]. Read and analyze the following files: [absolute path for each attachment]"
-```
-Capture the output from the shell result and write it to `${IDEATION_DIR}/codex-ideation-${SESSION_ID}.md` using the primary driver's file-write capability.
-
-**Gemini** (if `HAS_GEMINI`):
-- Include each attachment using Gemini's `@` file reference syntax inline in the prompt: `@./relative/path/to/file`
-- For files copied into `${IDEATION_DIR}/`, use the path relative to the project root (e.g., `@./.review/screenshot.png`)
-- Gemini can natively view images, PDFs, and text files via `@` references
-```bash
-gemini -p "[base prompt]. Analyze the following files: @./relative/path/to/attachment1 @./relative/path/to/attachment2. Do NOT modify any files." -y
-```
-Capture the output from the shell result and write it to `${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md` using the primary driver's file-write capability.
 
 Wait for all to complete. Read all output files.
 
@@ -247,23 +219,11 @@ Run in parallel:
 
 Before launching external counter-reviewers, read the state file and restore `externalThreadIds`, including `externalThreadIds.claude` when Claude CLI participated.
 
-**Codex** (if `HAS_CODEX`):
-```bash
-codex exec -s read-only -C "${PROJECT_ROOT}" "[counter-review prompt]"
-```
-Capture the output from the shell result and write it to `${IDEATION_DIR}/codex-counter-${SESSION_ID}.md` using the primary driver's file-write capability.
+**Codex** (if Codex participated): resume `externalThreadIds.codex` with the Codex resume command from the contracts, `-o "${IDEATION_DIR}/codex-counter-${SESSION_ID}.md"`, no `--output-schema`, and the counter-review prompt.
 
-**Claude reviewer channel** (if `HAS_CLAUDE_REVIEWER` and Claude was an external participant):
-```bash
-claude -p "Repository root: ${PROJECT_ROOT}. [counter-review prompt]. Use read-only file access only. Do not modify files." --resume "${CLAUDE_SESSION_ID}" --permission-mode plan --allowedTools "Read" "Grep" "Glob" --disallowedTools "Edit" "Write" "MultiEdit" --output-format json
-```
-Parse `result` from the JSON and write it to `${IDEATION_DIR}/claude-counter-${SESSION_ID}.md`. If resume fails, run a fresh Claude CLI counter-review with the full synthesis in the prompt and update `externalThreadIds.claude` with the new `session_id`.
+**Claude** (if Claude participated): resume `externalThreadIds.claude` with the Claude resume command from the contracts and the prompt "Repository root: ${PROJECT_ROOT}. [counter-review prompt]. Use read-only file access only. Do not modify files." Write `result` to `${IDEATION_DIR}/claude-counter-${SESSION_ID}.md`.
 
-**Gemini** (if `HAS_GEMINI`):
-```bash
-gemini -p "[counter-review prompt]. Do NOT modify any files." -y
-```
-Capture the output from the shell result and write it to `${IDEATION_DIR}/gemini-counter-${SESSION_ID}.md` using the primary driver's file-write capability.
+If either resume fails, run the round-1 command with the full synthesis in the prompt and store the new id.
 
 The primary driver also performs its own counter-review natively — evaluating the synthesis critically, especially ideas from external participants that may have been over- or under-weighted during synthesis.
 
@@ -294,7 +254,7 @@ Ideas with broad agreement across models — highest confidence.
 
 | # | Idea | Endorsed By | Category |
 |---|------|-------------|----------|
-| 1 | [idea] | Claude, Codex, Gemini | [theme] |
+| 1 | [idea] | Claude, Codex | [theme] |
 
 [For each: brief description and any enhancements from counter-review]
 
@@ -324,7 +284,6 @@ Ideas that emerged during the counter-review round.
 - Primary driver: ${IDEATION_DIR}/primary-ideation-${SESSION_ID}.md
 - Claude: ${IDEATION_DIR}/claude-ideation-${SESSION_ID}.md (if Claude ran)
 - Codex: ${IDEATION_DIR}/codex-ideation-${SESSION_ID}.md (if Codex ran)
-- Gemini: ${IDEATION_DIR}/gemini-ideation-${SESSION_ID}.md (if Gemini ran)
 
 ## Skipped Participants
 [Participant, reason, and confidence impact.]
@@ -349,9 +308,9 @@ If the user picks "Go deeper," loop back to Step 2 with a narrowed prompt focuse
 
 ---
 
-### Step 7: Cleanup
+### Step 7: Wrap Up
 
-Delete `.review/` and its contents: `rm -rf "${IDEATION_DIR}"` (single Bash command, permission prompt expected).
+Leave `.review/` in place. It is gitignored and every file carries the session id, so nothing needs deleting. Tell the user where the report and raw responses are.
 
 ---
 
@@ -359,18 +318,13 @@ Delete `.review/` and its contents: `rm -rf "${IDEATION_DIR}"` (single Bash comm
 
 - All models get the **same brief** — no model sees another's raw output until the synthesis step
 - The primary driver is the **synthesizer**, not a privileged voice — its ideas are attributed and challengeable just like the others
-- Codex model inherited from `~/.codex/config.toml` — do not hardcode `-m`
-- Gemini model inherited from `~/.gemini/settings.json` (`general.model`) — do not hardcode `-m`
-- Always use `-s read-only` for Codex — no file modifications
-- Claude CLI participant runs with `--permission-mode plan --output-format json`; capture `session_id` and resume with `--resume` for counter-review when possible
-- Launch Claude CLI with command cwd set to `PROJECT_ROOT`; if unavailable, add `--add-dir "${PROJECT_ROOT}"` and include the repo root in the prompt
+- Every driver inherits the user's configured model; `effort=` maps to reasoning effort only, `model=` overrides Claude only
+- External participant commands, flags, output parsing, and resume rules come from `references/reviewer-contracts.md`
 - Same-family secondary participants are skipped by default unless explicitly requested
 - Sandbox or network policy blocks on external participants degrade coverage but do not block ideation
-- Use `-y` for Gemini in non-interactive mode — prompt explicitly instructs "do NOT modify any files"
 - If a model fails or times out, continue with remaining models (minimum: primary driver alone)
 - Use the primary driver's native file-read and file-write capabilities for file operations — never `cp`, `mv`, or shell redirects
 - **Never use `cd` in Bash** — use `-C <dir>` for codex/git, absolute paths elsewhere
 - **Never use `$()` or pipe to `jq`** — run standalone, parse JSON natively
 - Quote all bash variables: `"${VAR}"`
-- If Codex CLI missing, suggest `npm install -g @openai/codex`
-- If Gemini CLI missing, suggest `npm install -g @google/gemini-cli`
+- If Codex CLI is missing or older than the configured model, record the Codex participant as skipped with the reason and suggest `npm install -g @openai/codex`

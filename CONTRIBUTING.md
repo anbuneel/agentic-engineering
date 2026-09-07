@@ -5,7 +5,7 @@ Thanks for your interest in contributing to Agentic Engineering! This project is
 ## What You Can Contribute
 
 - **New skills** — workflow instructions that users invoke with `/command-name`
-- **New agents** — sub-agent instructions that run in the background via the Task tool
+- **New agents** — sub-agent instructions that run in the background via the Agent tool
 - **Improvements to existing skills/agents** — better instructions, edge case handling, cross-platform fixes
 - **Documentation** — README improvements, examples, typo fixes
 
@@ -17,8 +17,9 @@ Thanks for your interest in contributing to Agentic Engineering! This project is
 
 ## Writing a Skill
 
-Skills live in `skills/` and are user-invoked workflows. Follow these conventions:
+Skills live in `skills/<name>/SKILL.md` and are user-invoked workflows. The layout follows the [Agent Skills specification](https://agentskills.io/specification): the directory name must equal the `name` in the frontmatter, `description` is required, and supporting material goes in `references/`, `scripts/`, or `assets/` beside `SKILL.md`. Follow these conventions:
 
+- **Keep `SKILL.md` under 500 lines** — move command contracts and reference tables into `references/`
 - **Start with a clear title and one-line description** of what the skill does
 - **Add a "When to Invoke" section** — when should a user reach for this?
 - **Add a "Prerequisites" section** — what tools/auth does it need?
@@ -31,11 +32,11 @@ Skills live in `skills/` and are user-invoked workflows. Follow these convention
 - **Generate session IDs natively** — no Bash calls for setup
 - **Never hardcode AI model names** — inherit from user config
 
-Look at `skills/multi-agent-code-review.md` as the reference example for a complex skill, or `skills/security-posture.md` for a simpler one.
+Look at `skills/multi-agent-code-review/SKILL.md` as the reference example for a complex skill, or `skills/security-posture/SKILL.md` for a simpler one.
 
 ## Writing an Agent
 
-Agents live in `agents/` and run as sub-agents via the Task tool. Follow these conventions:
+Agents live in `agents/` and run as sub-agents via the Agent tool. Follow these conventions:
 
 - **Add YAML frontmatter** with name, description, tools, and model fields
 - **Keep agents focused** — one clear responsibility per agent
@@ -48,9 +49,10 @@ Look at `agents/codebase-snapshot.md` as the reference example.
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes
-3. Test your skill/agent by running it in Claude Code on a real project
-4. If you changed anything under `scripts/` or `tools/`, run the matching Pester suite (`Invoke-Pester scripts/tests`, `Invoke-Pester tools/codex-setup-sync/tests`)
-5. Open a PR with:
+3. Test your skill/agent by running it on a real project. `claude --plugin-dir <path-to-repo>` loads the working tree without installing
+4. Run `claude plugin validate <path-to-repo>` — it checks the manifests, every `SKILL.md`, and agent frontmatter
+5. If you changed anything under `tools/`, run the matching Pester suite (`Invoke-Pester tools/codex-setup-sync/tests`)
+6. Open a PR with:
    - A clear title describing what you added or changed
    - A description explaining **why** this is useful
    - Confirmation that you tested it

@@ -14,13 +14,17 @@ Specific patterns that came from hitting real failure modes:
 - **MUST FIX before SHOULD FIX** — Commit ordering matters. MUST FIX findings get committed first as a safe checkpoint. If SHOULD FIX changes break quality gates, the agent reverts to that checkpoint instead of losing critical fixes.
 - **Reviewer session resume with fallback** — External reviewer sessions such as Codex CLI and Claude CLI can be resumed to maintain context across rounds. If resume fails (session expired, format changed), the skill falls back to a fresh review with prior round context injected.
 - **Reviewer registry** — The skill records which reviewers actually ran, which were skipped, and whether each reviewer was independent, native, or a secondary same-family review.
-- **Quality gates after every fix batch** — Never skip. Lint, typecheck, test, build — each as a separate command so failures are attributable.
+- **Quality gates after every fix batch** — Never skip. Lint, typecheck, test, build — each as a separate command so failures are attributable. The project's own `CLAUDE.md` or `AGENTS.md` can declare the gates; otherwise they are detected from the build files.
+- **Fan out once, verify narrowly** — Round 1 engages every reviewer. A verification round runs only when fixes landed, and only re-engages the reviewers whose findings were acted on. A clean round 1 converges. The old "minimum two rounds" rule cost a full reviewer pass and minutes of bot polling on every clean PR.
+- **Findings as data** — Every reviewer returns one JSON object per round, enforced by the CLI's schema flag. Deduplication and convergence stop depending on regex over prose.
 
 ## The Counter-Review Pattern
 
 The counter-review pattern came from a specific frustration: AI agents blindly apply every piece of feedback they receive, even when it's wrong.
 
-Having the primary driver assign dispositions (agree/partial/defer/reject) to each finding — and requiring the human to break ties on rejections and deferrals — means nothing is silently applied and nothing is silently ignored.
+Having the primary driver assign dispositions (agree/partial/defer/reject) to each finding — and recording both sides' arguments for every rejection and deferral — means nothing is silently applied and nothing is silently ignored.
+
+The code review loop never waits on the human. Rejections and deferrals are collected under "Needs your call" and presented at the end, with the reviewer's argument and the primary driver's argument side by side. That came from running reviews in desktop app worktrees and background sessions where a mid-loop question has nobody to answer it. `decisions=interactive` restores the mid-loop question for anyone who wants it.
 
 This creates an audit trail: every finding from every reviewer is documented with its disposition, rationale, and outcome. The review artifact captures the full decision history, not just the final diff.
 
