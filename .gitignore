@@ -4,7 +4,8 @@ docs/reviews/
 docs/analysis/
 
 # Claude Code local settings
-.claude/
+.claude/*
+!.claude/rules/
 
 # OS files
 .DS_Store

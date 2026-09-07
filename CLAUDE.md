@@ -73,3 +73,9 @@ The repo installs as a plugin named `ae` in both Claude Code and Codex. One inst
 - Codex CLI older than the configured model fails with "requires a newer version of Codex"; record the channel as skipped and suggest `npm install -g @openai/codex`
 - Generate session IDs natively — no Bash calls for setup
 - All temp files go in `.review/` inside the project root (gitignored) — avoids permission prompts and is cross-platform
+
+## Writing style
+
+Write in plain, direct language. Lead with what happened and what I need to do. No literary phrasing, no build-up, no flourishes. Keep sentences short.
+
+This applies to everything you write: chat replies, docs, code comments, commit messages, and PR descriptions.
