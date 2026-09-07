@@ -32,7 +32,9 @@ Skills live in `skills/<name>/SKILL.md` and are user-invoked workflows. The layo
 - **Generate session IDs natively** — no Bash calls for setup
 - **Never hardcode AI model names** — inherit from user config
 
-Look at `skills/multi-agent-code-review/SKILL.md` as the reference example for a complex skill, or `skills/security-posture/SKILL.md` for a simpler one.
+Look at `skills/multi-agent-code-review/SKILL.md` as the reference example for a complex skill, or `extras/skills/security-posture/SKILL.md` for a simpler one.
+
+Only `skills/` ships in the `ae` plugin. `extras/skills/` holds skills that are maintained here but installed by copying; put a new skill there unless it belongs in every install.
 
 ## Writing an Agent
 

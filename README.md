@@ -23,10 +23,12 @@ You use Claude Code, Codex App, Codex CLI, or another capable coding agent and w
 | `/multi-agent-code-review` | Yes | Yes | Yes | Claude, Codex, GH bots |
 | `/multi-agent-plan-review` | Yes | Yes | Yes | Claude, Codex |
 | `/multi-agent-ideate` | Yes | Yes | Yes | Claude, Codex |
-| `/security-posture` | Yes | Yes | Yes | gh for branch protection |
-| `/security-scan` | Yes | Yes | Yes | Semgrep, Gitleaks, npm audit |
-| `/security-audit` | Yes | Yes | Yes | Claude, Codex |
 | `/merge` | Yes | Yes | Yes | gh or GitHub MCP |
+| `/security-posture` (extras) | Yes | Yes | Yes | gh for branch protection |
+| `/security-scan` (extras) | Yes | Yes | Yes | Semgrep, Gitleaks, npm audit |
+| `/security-audit` (extras) | Yes | Yes | Yes | Claude, Codex |
+
+The first four ship in the `ae` plugin. The three marked *extras* live under `extras/skills/` and are installed by copying a directory; see [Install](#install).
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
@@ -100,13 +102,13 @@ Claude, Codex, and the primary driver can independently brainstorm on any topic 
 
 ---
 
-## Security Skills
+## Security Skills (extras)
 
-Three complementary skills covering different security angles — infrastructure checks, tool-based scanning, and AI-driven analysis.
+Three complementary skills covering different security angles — infrastructure checks, tool-based scanning, and AI-driven analysis. They are not part of the `ae` plugin; each lives under `extras/skills/` and installs by copying its directory into `~/.claude/skills/` or a project's `.claude/skills/` (Claude Code), or `~/.agents/skills/` or a project's `.agents/skills/` (Codex).
 
 ### `/security-posture` — Security Hygiene Scorecard
 
-[`skills/security-posture/SKILL.md`](skills/security-posture/SKILL.md) | Requires: git. Optional: gh
+[`extras/skills/security-posture/SKILL.md`](extras/skills/security-posture/SKILL.md) | Requires: git. Optional: gh
 
 Checks 16 security hygiene items across 6 categories: secrets management, dependency security, code quality gates, access control, container security, and infrastructure. Returns a letter-graded scorecard (A-F) with specific fix recommendations. No scanning tools needed — zero setup, instant results.
 
@@ -129,13 +131,13 @@ Checks 16 security hygiene items across 6 categories: secrets management, depend
 
 ### `/security-scan` — SAST, Dependencies, and Secrets
 
-[`skills/security-scan/SKILL.md`](skills/security-scan/SKILL.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
+[`extras/skills/security-scan/SKILL.md`](extras/skills/security-scan/SKILL.md) | Requires: git + at least one of Semgrep, Gitleaks, or npm
 
 Runs Semgrep (static analysis), `npm audit` (dependency vulnerabilities), and Gitleaks (secret detection). Auto-detects which tools are installed and runs only those. Outputs a consolidated report with findings by severity.
 
 ### `/security-audit` — AI-Driven Security Review
 
-[`skills/security-audit/SKILL.md`](skills/security-audit/SKILL.md) | Requires: git. Optional: Claude/Codex reviewer channels
+[`extras/skills/security-audit/SKILL.md`](extras/skills/security-audit/SKILL.md) | Requires: git. Optional: Claude/Codex reviewer channels
 
 Deep security review using the primary driver, available native subagents, and optional external reviewers. All findings go through counter-review before action — same disposition system as peer review.
 
@@ -197,7 +199,7 @@ Background sub-agents for runtimes that support native subagent dispatch. Claude
 
 ### Review Lenses
 
-[`agents/code-reviewer.md`](agents/code-reviewer.md), [`agents/silent-failure-hunter.md`](agents/silent-failure-hunter.md), [`agents/type-design-analyzer.md`](agents/type-design-analyzer.md) — Read-only review lenses used by `/multi-agent-code-review` and `/security-audit`. Correctness and security, silent failures and fail-open paths, and type soundness and design. Each takes its scope, severity scale, and output format from the task prompt.
+[`agents/code-reviewer.md`](agents/code-reviewer.md), [`agents/silent-failure-hunter.md`](agents/silent-failure-hunter.md), [`agents/type-design-analyzer.md`](agents/type-design-analyzer.md) — Read-only review lenses used by `/multi-agent-code-review` and the `security-audit` extra. Correctness and security, silent failures and fail-open paths, and type soundness and design. Each takes its scope, severity scale, and output format from the task prompt.
 
 ### Codebase Snapshot
 
@@ -258,7 +260,18 @@ Run `claude plugin validate <path-to-repo>` before opening a PR. It checks the p
 
 These are markdown files — any AI agent that can read instructions, inspect/edit files, and execute shell commands can use them. The skills define neutral actions and runtime adapters instead of requiring one tool vocabulary. Any tool that reads the Agent Skills layout can load `skills/<name>/SKILL.md` directly.
 
-**Verify your installation:** Run `/ae:security-posture` (Claude Code) or `$security-posture` (Codex) in any git repo. If you see a scorecard, you're set.
+### Extras
+
+`extras/skills/` holds skills that are in the repo but not in the plugin: `security-posture`, `security-scan`, and `security-audit`. Install one by copying its directory (the whole directory, including `references/` where present):
+
+| Runtime | Personal | Project |
+|---------|----------|---------|
+| Claude Code | `~/.claude/skills/<name>/` | `.claude/skills/<name>/` |
+| Codex | `~/.agents/skills/<name>/` | `.agents/skills/<name>/` |
+
+They keep their bare names: `/security-posture` in Claude Code, `$security-posture` in Codex. Copies do not update themselves; re-copy after pulling.
+
+**Verify your installation:** In Claude Code, type `/ae:` and the four plugin skills should autocomplete. In Codex, `/skills` lists them.
 
 ## Tool Setup
 

@@ -8,7 +8,7 @@ Visual flow diagrams for every shipped skill in the Agentic Engineering toolkit.
 |----------|--------|---------|
 | Collaboration | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` | Primary driver + reviewer registry + counter-review |
 | Workflow | `/merge` | Linear pipeline |
-| Security | `/security-scan`, `/security-audit`, `/security-posture` | Analysis + reporting |
+| Security (extras, not in the plugin) | `/security-scan`, `/security-audit`, `/security-posture` | Analysis + reporting |
 
 ---
 
@@ -161,6 +161,8 @@ graph TD
 
 ## `/security-scan` — SAST, Dependencies, and Secrets
 
+> Extra: lives in `extras/skills/`, installed by copying, not part of the `ae` plugin.
+
 Runs available scanning tools and generates a consolidated report. Auto-detects which tools are installed.
 
 ```mermaid
@@ -191,6 +193,8 @@ graph TD
 ---
 
 ## `/security-audit` — AI-Driven Security Review
+
+> Extra: lives in `extras/skills/`, installed by copying, not part of the `ae` plugin. Uses the same three lens agents as the plugin, so install the plugin too for the independent lenses.
 
 Full-codebase security analysis using primary-native analysis, available native subagents, and external reviewer channels with counter-review. Maps findings to OWASP Top 10.
 
@@ -225,6 +229,8 @@ graph TD
 ---
 
 ## `/security-posture` — Security Hygiene Scorecard
+
+> Extra: lives in `extras/skills/`, installed by copying, not part of the `ae` plugin.
 
 Fast infrastructure check across 16 items in 6 categories. Returns a letter grade (A-F) with specific fix recommendations. No scanning tools needed.
 

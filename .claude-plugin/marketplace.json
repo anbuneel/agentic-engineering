@@ -1,6 +1,6 @@
 {
   "name": "agentic-engineering",
-  "description": "Agent-agnostic workflow skills for Claude Code and Codex: multi-agent review with counter-review, merge, and security checks.",
+  "description": "Agent-agnostic workflow skills for Claude Code and Codex: multi-agent code and plan review with counter-review, ideation, and merge.",
   "owner": {
     "name": "Anbu N",
     "url": "https://github.com/anbuneel"
@@ -9,7 +9,7 @@
     {
       "name": "ae",
       "source": "./",
-      "description": "Multi-agent code review, plan review, ideation, merge, and security workflows for Claude Code and Codex.",
+      "description": "Multi-agent code review, plan review, ideation, and merge workflows for Claude Code and Codex.",
       "version": "0.8.0",
       "category": "development"
     }

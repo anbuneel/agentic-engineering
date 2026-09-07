@@ -7,17 +7,18 @@ Agentic Engineering — a collection of agent-agnostic workflow skills and sub-a
 ## Structure
 
 ```
-skills/          ← User-invoked workflows (/command-name)
-  multi-agent-code-review.md
-  multi-agent-plan-review.md
-  multi-agent-ideate.md
-  merge.md
-  security-scan.md
-  security-audit.md
-  security-posture.md
-agents/          ← Claude-compatible sub-agents; Codex equivalents are runtime prompts for now
-  codebase-snapshot.md
-  code-cleanup-analyst.md
+skills/          ← Shipped in the ae plugin (/ae:<name> in Claude Code, $<name> in Codex)
+  multi-agent-code-review/SKILL.md  (+ references/)
+  multi-agent-plan-review/SKILL.md  (+ references/)
+  multi-agent-ideate/SKILL.md       (+ references/)
+  merge/SKILL.md
+extras/skills/   ← In the repo, not in the plugin; installed by copying a directory
+  security-scan/SKILL.md
+  security-audit/SKILL.md           (+ references/)
+  security-posture/SKILL.md
+agents/          ← Claude sub-agents shipped in the plugin; Codex runs the lens prompts as passes
+  code-reviewer.md, silent-failure-hunter.md, type-design-analyzer.md   ← review lenses
+  codebase-snapshot.md, code-cleanup-analyst.md
 tools/           ← Standalone CLI tools
   claude-memory-sync/  ← Cross-machine Claude memory sync via git
   codex-setup-sync/    ← Cross-machine Codex setup sync via git
@@ -49,7 +50,7 @@ The repo installs as a plugin named `ae` in both Claude Code and Codex. One inst
 
 ## Documentation Rules
 
-- When modifying skill files (`skills/*/SKILL.md`), always check and update `docs/SKILLS_GUIDE.md` and `README.md` if the change affects documented behavior, flow diagrams, or step naming
+- When modifying skill files (`skills/*/SKILL.md`, `extras/skills/*/SKILL.md`), always check and update `docs/SKILLS_GUIDE.md` and `README.md` if the change affects documented behavior, flow diagrams, or step naming
 - Only document tracked, shipped skills in README and SKILLS_GUIDE
 
 ## Skill Design Rules

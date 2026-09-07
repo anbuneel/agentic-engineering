@@ -19,6 +19,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Skills no longer delete `.review/`. It is gitignored and every file carries the run id, so the `rm -rf` step and its permission are gone from every skill
 
 ### Removed
+- `security-scan`, `security-audit`, and `security-posture` moved from `skills/` to `extras/skills/`. They stay in the repo and are installed by copying a directory, but they are no longer part of the `ae` plugin, which ships the four multi-agent and merge workflows plus the agents
 - The simplification pass at the start of `/multi-agent-code-review`. It committed an unreviewed refactor before any reviewer saw the code and was Claude-only; run `/simplify` separately when wanted
 - `scripts/install-skill-links.ps1`, its Pester tests, and `scripts/check-skill-sync.sh`. Plugin installs are cached and updated by the tools themselves, so per-runtime symlinks and the drift check have nothing left to do
 
