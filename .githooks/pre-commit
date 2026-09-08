@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+# AGENTS.md is a generated duplicate of CLAUDE.md for tools that read AGENTS.md.
+# Refresh and stage it from the staged blob, not the worktree, so partial
+# staging cannot leave the two files describing different things.
+# Line 1 is the only intentional difference: the H1 names each file.
+if ! git diff --cached --quiet -- CLAUDE.md; then
+  if git cat-file -e :CLAUDE.md 2>/dev/null; then
+    git show :CLAUDE.md | sed '1s|^# CLAUDE\.md$|# AGENTS.md|' > AGENTS.md
+    git add AGENTS.md
+  fi
+fi

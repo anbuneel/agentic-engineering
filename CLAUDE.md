@@ -52,6 +52,7 @@ The repo installs as a plugin named `ae` in both Claude Code and Codex. One inst
 
 - When modifying skill files (`skills/*/SKILL.md`, `extras/skills/*/SKILL.md`), always check and update `docs/SKILLS_GUIDE.md` and `README.md` if the change affects documented behavior, flow diagrams, or step naming
 - Only document tracked, shipped skills in README and SKILLS_GUIDE
+- `AGENTS.md` is a generated duplicate of `CLAUDE.md` for tools that don't read `CLAUDE.md`. **Edit `CLAUDE.md` only** — `.githooks/pre-commit` regenerates and stages `AGENTS.md` whenever `CLAUDE.md` is staged, rewriting only the H1. Direct edits to `AGENTS.md` will be silently clobbered. Arm hooks once with `git config core.hooksPath .githooks`
 
 ## Skill Design Rules
 
