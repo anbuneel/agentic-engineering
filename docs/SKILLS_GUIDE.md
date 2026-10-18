@@ -8,6 +8,7 @@ Visual flow diagrams for every shipped skill in the Agentic Engineering toolkit.
 |----------|--------|---------|
 | Collaboration | `/multi-agent-code-review`, `/multi-agent-plan-review`, `/multi-agent-ideate` | Primary driver + reviewer registry + counter-review |
 | Workflow | `/merge` | Linear pipeline |
+| Codebase | `/codebase-guardrails` | Tools first, then analysis, then a ranked plan |
 | Security (extras, not in the plugin) | `/security-scan`, `/security-audit`, `/security-posture` | Analysis + reporting |
 
 ---
@@ -156,6 +157,41 @@ graph TD
 > **Requires:** git + (gh or GitHub MCP)
 >
 > **Key features:** Stops before merging when the local target branch is ahead of its remote, because a PR branched from a stale target silently absorbs its unpushed commits into the squash, content-proof branch deletion (`git patch-id --verbatim`, since a squash merge breaks the ancestry that `-d` tests and the default algorithm ignores whitespace), confirms GitHub actually merged rather than queued, repo-wide sweep across local branches, remote branches and stale tracking refs, never deletes a protected or worktree-held branch or one it could not verify, falls back to a follow-up PR when the target rejects direct pushes, reports outstanding work alongside a full branch inventory
+
+---
+
+## `/codebase-guardrails` — Make the Easy Change the Right One
+
+Audits a codebase built mostly by agents, or sets the baseline for a new app, and plans a fix for each problem at the most deterministic layer that works: CODE, then CHECK, then PROSE, with REVIEW kept for decisions only a person should make. Every CODE fix is paired with the CHECK that keeps it fixed. Read-only apart from the report.
+
+```mermaid
+graph TD
+    A["Setup: options,\n.review/ in .gitignore"] --> B["Detect stack, mode,\ninstruction files, last report"]
+    B --> C{Mode}
+    C -- existing --> D["Run tools: compiler + strict flag probes,\nlint + strict probe, knip, cycles,\nduplication, tests, escape-hatch search"]
+    C -- new --> D2["Run compiler, linter, tests\nfor the starting point"]
+    D --> E["Map conventions:\nvariants, canonical choice,\nexample file to copy"]
+    D2 --> E
+    E --> F{Mode}
+    F -- existing --> G["Find problems,\ngrouped by cause with evidence"]
+    F -- new --> G2["Check the new-app baseline:\npresent / partial / missing"]
+    G --> L{lenses=on?}
+    G2 --> L
+    L -- yes --> L2["Lens passes with the tool output:\ntype-design-analyzer,\nsilent-failure-hunter; verify each finding"]
+    L -- no --> I
+    L2 --> I["Audit prose: enforceable,\nstale, keep, missing"]
+    I --> J["Classify CODE / CHECK / PROSE / REVIEW,\nrank by leverage, effort, risk"]
+    J --> K["Phased plan of small PRs,\neach a standalone task prompt;\nchecks roll out warn → fix → error"]
+    K --> M["docs/analysis/codebase-guardrails-{id}.md"]
+```
+
+> **Requires:** git. Optional: the stack's analysis tools (Node: knip, dependency-cruiser or madge, jscpd, typescript-eslint), lens agents from the plugin for `lenses=on`
+>
+> **Options:** `mode=<auto|existing|new>`, `scope=<path>`, `tools=<installed|fetch>` (default installed, which never downloads), `lenses=<off|on>` (default off)
+>
+> **Output:** `docs/analysis/codebase-guardrails-{id}.md`
+>
+> **Key features:** Tool facts before model opinions, the cost of each stricter compiler flag measured separately, one canonical example file per convention, findings grouped by cause instead of listed per line, every instruction-file rule classified as enforceable, stale, keep, or missing, PR task prompts a fresh session can run, tool counts compared with the previous report, runs under GitHub Copilot as a copied skill
 
 ---
 

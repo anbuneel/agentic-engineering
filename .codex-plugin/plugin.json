@@ -1,7 +1,7 @@
 {
   "name": "ae",
   "version": "0.8.0",
-  "description": "Agentic Engineering: multi-agent code review, plan review, ideation, and merge workflows with counter-review on every finding.",
+  "description": "Agentic Engineering: multi-agent code review, plan review, ideation, merge, and codebase guardrail workflows with counter-review on every finding.",
   "author": {
     "name": "Anbu N",
     "url": "https://github.com/anbuneel"
@@ -13,7 +13,7 @@
   "skills": "./skills",
   "interface": {
     "displayName": "Agentic Engineering",
-    "shortDescription": "Multi-agent review, ideation, and merge workflows",
+    "shortDescription": "Multi-agent review, ideation, merge, and codebase guardrail workflows",
     "developerName": "Anbu N",
     "category": "Developer Tools"
   }

@@ -1,6 +1,6 @@
 # Agentic Engineering
 
-Agent-agnostic workflow skills for AI coding agents. The skills add multi-agent code review, plan review, security scanning, and automated documentation workflows to Claude Code, Codex App, and Codex CLI while keeping one canonical Markdown source per workflow.
+Agent-agnostic workflow skills for AI coding agents. The skills add multi-agent code review, plan review, codebase guardrail audits, security scanning, and automated documentation workflows to Claude Code, Codex App, and Codex CLI while keeping one canonical Markdown source per workflow.
 
 **View the [Visual Skills Guide](docs/SKILLS_GUIDE.md) for flow diagrams of every workflow.**
 
@@ -24,11 +24,12 @@ You use Claude Code, Codex App, Codex CLI, or another capable coding agent and w
 | `/multi-agent-plan-review` | Yes | Yes | Yes | Claude, Codex |
 | `/multi-agent-ideate` | Yes | Yes | Yes | Claude, Codex |
 | `/merge` | Yes | Yes | Yes | gh or GitHub MCP |
+| `/codebase-guardrails` | Yes | Yes | Yes | Stack analysis tools, lens agents (opt-in) |
 | `/security-posture` (extras) | Yes | Yes | Yes | gh for branch protection |
 | `/security-scan` (extras) | Yes | Yes | Yes | Semgrep, Gitleaks, npm audit |
 | `/security-audit` (extras) | Yes | Yes | Yes | Claude, Codex |
 
-The first four ship in the `ae` plugin. The three marked *extras* live under `extras/skills/` and are installed by copying a directory; see [Install](#install).
+The first five ship in the `ae` plugin. The three marked *extras* live under `extras/skills/` and are installed by copying a directory; see [Install](#install). `/codebase-guardrails` also runs in GitHub Copilot when its directory is copied in; see [GitHub Copilot](#github-copilot).
 
 **Status:** Active development. Used daily by the author on real projects. Core skills (peer review, security) are stable. Expect new skills and refinements regularly.
 
@@ -159,6 +160,36 @@ Remote branches get the same treatment: a merged PR proves what the head commit 
 
 **Resumable and portable.** It takes `/merge <PR number or URL>`, so the feature branch need not be checked out; re-running after a successful merge resumes at the documentation step. It confirms GitHub actually merged rather than queueing the PR behind auto-merge or a merge queue, opens a follow-up docs PR when the target branch rejects direct pushes, and probes GitHub access, fetch, push, and checkout capabilities separately — reporting outstanding work instead of failing when one is missing. Fork checkouts resolve base and head repositories explicitly rather than assuming `origin`. Works with or without `gh`, running through GitHub MCP tools in remote containers.
 
+### `/codebase-guardrails` — Make the Easy Change the Right One
+
+[`skills/codebase-guardrails/SKILL.md`](skills/codebase-guardrails/SKILL.md) | Requires: git. Optional: the stack's analysis tools, lens agents for `lenses=on`
+
+Agents copy what already exists and take the shortest path. In a codebase built mostly by agents, the main risk is drift: several ways of doing the same thing, types that allow invalid states, and rules that live only in prose. This skill finds those problems and plans a fix for each at the most deterministic layer that works. The layer order follows [poteto's inverse pyramid](https://x.com/poteto/status/2111133080526495985):
+
+1. **CODE** — a structural change that removes the problem class: one shared schema, a branded type, a deleted duplicate
+2. **CHECK** — a compiler flag, lint rule, boundary rule, test, CI step, or hook that fails if the problem returns
+3. **PROSE** — an instruction-file line, only when neither of the above can work
+4. **REVIEW** — decisions a person should make: conventions, boundaries, and the example files agents copy
+
+**How it works:**
+
+1. **Detect** — stack, mode (`existing` audit or `new` app baseline), instruction files, and the previous report if there is one
+2. **Tools first** — compiler with each stricter flag probed separately, linter plus a strict type-aware probe, knip, dependency-cruiser or madge, jscpd, tests, and an escape-hatch search. Only tools already installed run unless `tools=fetch`
+3. **Map conventions** — for routes, validation, errors, config, data access, the API client, and tests: every variant in use, one canonical choice, and the file agents should copy
+4. **Find problems** — grouped by cause with evidence. With `lenses=on`, the `type-design-analyzer` and `silent-failure-hunter` passes run next, using the tool output
+5. **Audit the prose** — every rule in `CLAUDE.md`, `AGENTS.md`, and Copilot instructions is enforceable (make it a check, then delete the line), stale, keep, or missing
+6. **Plan** — ranked by leverage, in phases of small PRs. Each PR is a task prompt a fresh agent session can run. New checks roll out as warn, then fix, then error, so they stay fixed
+
+> **Options:** `mode=<auto|existing|new>`, `scope=<path>`, `tools=<installed|fetch>`, `lenses=<off|on>` (default off)
+>
+> **Output:** `docs/analysis/codebase-guardrails-{id}.md`. Read-only otherwise. A re-run shows how each tool count changed since the last report.
+
+Stack references cover Node, TypeScript, and Fastify in detail, with tool equivalents for Python, Java and Kotlin, Go, and .NET.
+
+**Which model:** run the audit with a model from a different family than the one that wrote most of the code, then have the other family critique the report. `/multi-agent-plan-review` does that where it is installed; otherwise open a new chat with the other model.
+
+**What makes it different:** most audits list problems. This one pairs every code fix with the check that keeps it fixed, and keeps prose for what no check can enforce.
+
 ---
 
 ## Tools
@@ -199,7 +230,7 @@ Background sub-agents for runtimes that support native subagent dispatch. Claude
 
 ### Review Lenses
 
-[`agents/code-reviewer.md`](agents/code-reviewer.md), [`agents/silent-failure-hunter.md`](agents/silent-failure-hunter.md), [`agents/type-design-analyzer.md`](agents/type-design-analyzer.md) — Read-only review lenses used by `/multi-agent-code-review` and the `security-audit` extra. Correctness and security, silent failures and fail-open paths, and type soundness and design. Each takes its scope, severity scale, and output format from the task prompt.
+[`agents/code-reviewer.md`](agents/code-reviewer.md), [`agents/silent-failure-hunter.md`](agents/silent-failure-hunter.md), [`agents/type-design-analyzer.md`](agents/type-design-analyzer.md) — Read-only review lenses used by `/multi-agent-code-review`, `/codebase-guardrails`, and the `security-audit` extra. Correctness and security, silent failures and fail-open paths, and type soundness and design. Each takes its scope, severity scale, and output format from the task prompt.
 
 ### Codebase Snapshot
 
@@ -246,6 +277,17 @@ codex plugin add ae@agentic-engineering
 
 Invoke with `$multi-agent-code-review` or pick the skill from `/skills`. The desktop app and its worktrees share this install. Codex cloud does not load plugins; to use these skills there, copy the `skills/<name>/` directories you need into that repository's `.agents/skills/`.
 
+### GitHub Copilot
+
+Copilot in VS Code, the Copilot CLI, and the Copilot cloud agent read the same `SKILL.md` format. They do not install this plugin. Copy a skill directory, including `references/`, into one of these:
+
+| Scope | Location |
+|-------|----------|
+| Personal | `~/.copilot/skills/<name>/`, or `~/.claude/skills/<name>/` or `~/.agents/skills/<name>/` |
+| Project | `.github/skills/<name>/`, or `.claude/skills/<name>/` or `.agents/skills/<name>/` |
+
+`/codebase-guardrails` runs there on its own. The multi-agent skills need the Claude or Codex CLI for their external reviewers. Copies do not update themselves; re-copy after pulling.
+
 ### Update
 
 Both tools install a snapshot and refresh it when the plugin version changes. To release: bump with `.\scripts\Set-PluginVersion.ps1 -Version x.y.z`, commit, then run `claude plugin update ae@agentic-engineering` or `codex plugin marketplace upgrade` on each machine.
@@ -271,7 +313,7 @@ These are markdown files — any AI agent that can read instructions, inspect/ed
 
 They keep their bare names: `/security-posture` in Claude Code, `$security-posture` in Codex. Copies do not update themselves; re-copy after pulling.
 
-**Verify your installation:** In Claude Code, type `/ae:` and the four plugin skills should autocomplete. In Codex, `/skills` lists them.
+**Verify your installation:** In Claude Code, type `/ae:` and the five plugin skills should autocomplete. In Codex, `/skills` lists them.
 
 ## Tool Setup
 
@@ -288,6 +330,7 @@ They keep their bare names: `/security-posture` in Claude Code, `$security-postu
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | Primary driver or external reviewer channel |
 | [Semgrep](https://semgrep.dev/) | `pip install semgrep` | `/security-scan` (optional) |
 | [Gitleaks](https://github.com/gitleaks/gitleaks) | `brew install gitleaks` | `/security-scan` (optional) |
+| [knip](https://knip.dev/), [dependency-cruiser](https://github.com/sverweij/dependency-cruiser), [jscpd](https://github.com/kucherenko/jscpd) | dev dependency, or `tools=fetch` | `/codebase-guardrails` (optional, Node projects) |
 
 **Runtime detection:** Skills set `PRIMARY_DRIVER` from the active runtime. Claude Code command contexts use `claude-code`; Codex desktop contexts use `codex-app`; `codex exec` contexts use `codex-cli`; ambiguous runtimes use `unknown` and fall back to neutral capabilities unless behavior would materially differ.
 

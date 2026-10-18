@@ -24,6 +24,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - `scripts/install-skill-links.ps1`, its Pester tests, and `scripts/check-skill-sync.sh`. Plugin installs are cached and updated by the tools themselves, so per-runtime symlinks and the drift check have nothing left to do
 
 ### Added
+- `/codebase-guardrails` audits a codebase built mostly by agents, or sets the baseline for a new app. It runs the stack's analysis tools first, maps each convention to one canonical example, finds problems grouped by cause, classifies every instruction-file rule, and writes a ranked plan that fixes each problem as code first, then a static check, then prose. Each PR in the plan is a task prompt a fresh session can run, and new checks roll out as warn, then fix, then error. Ships in the plugin, with stack references for Node, TypeScript, and Fastify and tool equivalents for Python, Java and Kotlin, Go, and .NET. Also runs in GitHub Copilot as a copied skill
 - `scripts/Set-PluginVersion.ps1` bumps the version in every plugin manifest before a release
 - `agents/code-reviewer.md`, `agents/silent-failure-hunter.md`, `agents/type-design-analyzer.md` — the three review lenses the multi-agent skills dispatch. They were previously assumed to be Claude Code built-ins, which no longer exist, so the skills silently fell back to the primary driver reviewing itself
 

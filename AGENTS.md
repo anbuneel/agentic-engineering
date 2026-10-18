@@ -12,6 +12,7 @@ skills/          ← Shipped in the ae plugin (/ae:<name> in Claude Code, $<name
   multi-agent-plan-review/SKILL.md  (+ references/)
   multi-agent-ideate/SKILL.md       (+ references/)
   merge/SKILL.md
+  codebase-guardrails/SKILL.md      (+ references/)
 extras/skills/   ← In the repo, not in the plugin; installed by copying a directory
   security-scan/SKILL.md
   security-audit/SKILL.md           (+ references/)
