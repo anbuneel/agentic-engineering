@@ -10,7 +10,7 @@
       "name": "ae",
       "source": "./",
       "description": "Multi-agent code review, plan review, ideation, merge, and codebase guardrail workflows for Claude Code and Codex.",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "category": "development"
     }
   ]

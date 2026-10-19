@@ -1,6 +1,6 @@
 {
   "name": "ae",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Agentic Engineering: multi-agent code review, plan review, ideation, merge, and codebase guardrail workflows with counter-review on every finding.",
   "author": {
     "name": "Anbu N",

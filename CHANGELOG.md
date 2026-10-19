@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-19
+
 ### Changed
 - Skills moved from `skills/<name>.md` to `skills/<name>/SKILL.md` to follow the Agent Skills specification; each directory name now equals the frontmatter `name`
 - The repo is now a plugin for both Claude Code (`.claude-plugin/`) and Codex (`.codex-plugin/`, `.agents/plugins/`), published as `ae`. One install per machine covers every project, worktree, and the Codex desktop app; Claude Code invokes skills as `/ae:<name>`
