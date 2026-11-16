@@ -101,7 +101,7 @@ Set `IDEATION_DIR` to `.review/` in the project root (absolute path). Add `.revi
 
 Initialize state file `${IDEATION_DIR}/ideation-state-${SESSION_ID}.json` tracking: `sessionId`, `primaryDriver`, `councilRegistry`, `projectRoot`, `ideationDir`, `externalThreadIds`, `hasCodex`, `hasClaudeReviewer`, `deepenRound` (starts at 0), `attachmentPaths`.
 
-**CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth. Always re-read it before acting.**
+Read and update this state file after every major step. After context compaction it is the only reliable record, so re-read it before acting.
 
 ---
 
@@ -119,7 +119,7 @@ If the user provided a topic/question with the `/multi-agent-ideate` command, us
 Store the full brief. If attachments are provided (screenshots, files, code):
 - Files within the project → store their **absolute paths** in a list called `ATTACHMENT_PATHS`
 - Files outside the project → copy into `${IDEATION_DIR}/` using the primary driver's file-read and file-write capabilities, then add the new path to `ATTACHMENT_PATHS`
-- **CRITICAL: Never summarize or describe attachments as text substitutes. Always pass the actual file paths to each model so they can read/view the files themselves.**
+- Pass the actual file paths to each model, not a text summary of the attachments. Each model must read or view the files itself, or it is reviewing your description instead of the source.
 
 Write the brief to `${IDEATION_DIR}/brief-${SESSION_ID}.md`.
 

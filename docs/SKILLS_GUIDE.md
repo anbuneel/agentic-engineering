@@ -39,24 +39,28 @@ graph TD
     D --> D1["reject / defer → Needs your call\n(recorded, not blocking)"]
     D --> E{Converged?}
     E -- "Fixes this round" --> F["Fix MUST_FIX, gates, commit\nFix SHOULD_FIX, gates, commit"]
-    F --> G[Push + round summary comment]
+    F --> G["Push between rounds (per project rules,
+never while a reviewer runs)
++ round summary comment"]
     G --> H["Verification round:\nresume only reviewers whose\nfindings were acted on;\npoll bots only after a push"]
     H --> C
 
-    E -- "No fixes, bots verified" --> I[Finalize]
+    E -- "No fixes, bot findings settled" --> I[Finalize]
     I --> J[Needs your call presented]
-    I --> K[Deferred Items → GH Issues]
+    I --> K["Deferred items listed
+(issues only if asked or project rules say so)"]
     I --> L[PR description + final comment]
-    I --> M[Review artifact]
+    I --> M["Audit file only if a
+finding was contested"]
 ```
 
 > **Requires:** git, gh. Optional: Claude or Codex CLI as the cross-family reviewer, GitHub bot apps (Claude, Devin, Codex GH)
 >
 > **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`, `decisions=<deferred|interactive>` (default deferred), `require=<reviewer>`
 >
-> **Output:** `docs/reviews/code-review-{id}.md`
+> **Output:** final PR comment with the status table; `docs/reviews/code-review-{id}.md` only when a finding was contested or the project rules call for one
 >
-> **Key features:** Fan out once and verify narrowly, findings as one JSON object per reviewer, reject and defer recorded with both arguments instead of blocking, GH finding verification via cross-round fingerprinting, quality gates from the project's `CLAUDE.md`/`AGENTS.md` or detected from build files, MUST_FIX committed before SHOULD_FIX (safe rollback)
+> **Key features:** Fan out once and verify narrowly, findings as one JSON object per reviewer, reject and defer recorded with both arguments instead of blocking, GH finding verification via cross-round fingerprinting, quality gates from the project's `CLAUDE.md`/`AGENTS.md` or detected from build files, MUST_FIX committed before SHOULD_FIX (safe rollback), host project rules decide draft vs ready, push timing, issues, and audit files (conservative defaults: draft PR, no issues, audit file only when contested), fix files staged by path, a silent bot counts as not re-reviewed rather than approved
 
 ---
 
@@ -73,14 +77,15 @@ graph TD
     D -- Yes --> E[Revise Plan]
     E --> F[Resume Reviewer Session]
     F --> B
-    D -- "No (or max rounds)" --> G[Write Review Artifact]
+    D -- "No (or max rounds)" --> G["Write audit file
+if a finding was contested"]
 ```
 
 > **Requires:** primary driver. Optional: Claude or Codex CLI as the cross-family reviewer
 >
 > **Options:** `effort=<fast|balanced|deep>`, `model=<fable|opus|sonnet|haiku>`, `budget=<usd>`, `decisions=<deferred|interactive>` (default deferred), `require=<reviewer>`
 >
-> **Output:** `docs/reviews/plan-review-{id}.md`
+> **Output:** status table in chat; `docs/reviews/plan-review-{id}.md` only when a finding was contested or the project rules call for one
 >
 > **Key features:** reviewer session resume, findings as one JSON object per round, Needs your call instead of a blocking gate, full audit trail of every finding + disposition + revision
 

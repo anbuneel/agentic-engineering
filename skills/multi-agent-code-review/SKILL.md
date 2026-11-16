@@ -121,7 +121,7 @@ Execute the phases in order. **Bash safety rules for the entire skill:**
 - **Never pipe to `jq`** — parse JSON natively in-context
 - Run each command as a standalone call; never chain with `&&`, `;`, or `|`
 
-**CRITICAL — the state file is the only source of truth that survives context compaction. Read it at the start of every phase and every round; update it after every major step.**
+The state file is the only record that survives context compaction. Read it at the start of every phase and every round, and update it after every major step.
 
 ---
 
@@ -177,6 +177,22 @@ Resolve the commands that must pass after every fix batch, in this order:
 
 Store the list as `qualityGates`. Each gate is run as its own standalone command.
 
+### Step A3b: Host project rules
+
+Every git and GitHub choice in this skill follows the host project's rules first. Read `CLAUDE.md` and `AGENTS.md` at `PROJECT_ROOT` (and any file they point to for git, PR, or review rules). Where they rule on a choice, follow them. Where they are silent, use the default below, which is the conservative option.
+
+| Choice | Default when the project is silent | Store as |
+|--------|------------------------------------|----------|
+| New PR state | Open as a draft (`--draft`). Do not mark it ready; tell the user it is ready to mark | `hostRules.prState`: `draft` or `ready`; `hostRules.markReady`: `user` or `agent` |
+| Pushing | Allowed, but only between review rounds and never while a reviewer or GitHub review bot is running. A rule that forbids agent pushes means commit locally and never push | `hostRules.push`: `between-rounds` or `never` |
+| GitHub bot re-review | Unknown: assume a bot may not re-review on push. A rule saying the bot reviews once, at ready, sets `on-ready` | `hostRules.botReview`: `on-push`, `on-ready`, or `unknown` |
+| Deferred items | List them in the report. No `gh issue create` unless the user asks or the rules say so. If the rules send deferrals to a doc (for example a roadmap), use that doc | `hostRules.deferrals`: `report`, `issues`, or `doc:<path>` |
+| Audit file in `docs/reviews/` | Only when a finding was contested (any entry in `needsYourCall`), or the rules call for one | `hostRules.auditFile`: `contested` or `always` |
+| Staging | Stage only the files the fix round changed, by path. Never `git add -A` or `git add .`, whatever the rules say | fixed |
+| File names | No agent-name suffix (no `-claude.md`, `-codex.md`) | fixed |
+
+Record each choice and where it came from (rule quote or `default`) in the state file and print them with the resolved options.
+
 ### Step A4: State file
 
 Initialize `${REVIEW_DIR}/review-state-${REVIEW_ID}.json`:
@@ -187,6 +203,7 @@ Initialize `${REVIEW_DIR}/review-state-${REVIEW_ID}.json`:
 | `options` | resolved effort, model, budget, decisions, require |
 | `reviewerRegistry` | entries described above |
 | `qualityGates` | commands from Step A3 |
+| `hostRules` | choices from Step A3b, each with its source |
 | `round` | starts at 1 |
 | `externalThreadIds` | `codex`, `claude` session ids |
 | `seenCommentIds` | namespaced GitHub comment ids already processed |
@@ -207,7 +224,7 @@ Initialize `${REVIEW_DIR}/review-state-${REVIEW_ID}.json`:
 | `summary` | string | short description |
 | `roundRaised` | number | round the finding first appeared |
 | `roundFixed` | number or null | round the fix was committed |
-| `verified` | boolean or null | `true` resolved, `false` re-raised after fix, `null` pending next poll |
+| `verified` | `true`, `false`, `"not_re_reviewed"`, or null | `true` the bot re-reviewed and did not re-raise it, `false` re-raised after fix, `"not_re_reviewed"` the bot did not review again after the fix, `null` pending next poll |
 
 ### Step A5: Rebase check (once)
 
@@ -218,7 +235,7 @@ git -C "${PROJECT_ROOT}" fetch origin "${BASE_BRANCH}"
 git -C "${PROJECT_ROOT}" merge-base HEAD "origin/${BASE_BRANCH}"
 ```
 
-If the base moved, rebase; on conflict abort, notify the user, and stop. After a successful rebase run the quality gates. Do not rebase again during the review: a moved base mid-review is reported in the round summary and handled at finalize.
+If the base moved and `hostRules.push` is `never`, do not rebase; report the moved base at finalize. Otherwise rebase; on conflict abort, notify the user, and stop. After a successful rebase run the quality gates. Do not rebase again during the review: a moved base mid-review is reported in the round summary and handled at finalize.
 
 ### Step A6: Ensure the PR exists
 
@@ -226,9 +243,9 @@ If the base moved, rebase; on conflict abort, notify the user, and stop. After a
 gh pr view --json number
 ```
 
-PR exists → store `prNumber`. Otherwise push with `git -C "${PROJECT_ROOT}" push -u origin "${BRANCH}"`, write the PR body to `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`, create it with `gh pr create --body-file`, and store the number. If a rebase happened in Step A5 on an existing PR, push with `--force-with-lease` first.
+PR exists → store `prNumber` and check `isDraft` with `gh pr view --json number,isDraft`. Otherwise, if `hostRules.push` is `never`, stop and tell the user the branch must be pushed and a PR opened before the review can run. Else push with `git -C "${PROJECT_ROOT}" push -u origin "${BRANCH}"`, write the PR body to `${REVIEW_DIR}/pr-body-${REVIEW_ID}.md`, create it with `gh pr create --draft --body-file` (drop `--draft` only when `hostRules.prState` is `ready`), and store the number. If a rebase happened in Step A5 on an existing PR, push with `--force-with-lease` first, under the same push rule.
 
-Set `pushedSinceLastPoll: true`. Update the state file.
+Set `pushedSinceLastPoll: true` if this step pushed. Update the state file.
 
 ---
 
@@ -238,8 +255,8 @@ Loop for up to 5 rounds. **At the start of every round, read the state file and 
 
 ### Step B1: Choose who reviews this round
 
-- **Round 1:** engage every available reviewer: `primary-native`, the three lens agents, the cross-family CLI reviewer, and GitHub bot polling.
-- **Verification round (round 2 and later):** engage only the reviewers listed in `actedOnSources` (their findings were fixed last round) plus any reviewer whose previous run failed. Resume CLI sessions with the verification prompt; re-dispatch lens agents with their prior findings and the change summary. Poll GitHub bots only when `pushedSinceLastPoll` is true. `primary-native` always re-checks the diff of last round's fix commits.
+- **Round 1:** engage every available reviewer: `primary-native`, the three lens agents, the cross-family CLI reviewer, and GitHub bot polling. The poll reads comments bots have already posted. With `hostRules.botReview` `on-ready` and a draft PR, bots have not reviewed yet: skip the poll and record `gh bots: not yet reviewed (draft)`.
+- **Verification round (round 2 and later):** engage only the reviewers listed in `actedOnSources` (their findings were fixed last round) plus any reviewer whose previous run failed. Resume CLI sessions with the verification prompt; re-dispatch lens agents with their prior findings and the change summary. Poll GitHub bots only when `pushedSinceLastPoll` is true and `hostRules.botReview` is not `on-ready`; an `on-ready` bot does not review again after a push, so its fixed findings go straight to `verified: "not_re_reviewed"`. `primary-native` always re-checks the diff of last round's fix commits, which covers bot findings no bot will re-check.
 
 Record `engagedThisRound` in the state file.
 
@@ -270,8 +287,8 @@ Wait for every engaged reviewer and the poll. Read each output file. Parse GitHu
 **GitHub bot verification.** For each new bot finding, match its fingerprint against `ghBotFindings` entries from the same bot with `roundFixed != null` and `verified == null`:
 
 1. Match → `verified: false` (re-raised); treat as a new finding for counter-review.
-2. After processing a bot's new comments, every pending finding from that bot that was not re-raised → `verified: true`.
-3. A bot that posted nothing this round while `pushedSinceLastPoll` was true at poll start → `verified: true` on all its pending findings (implicit approval).
+2. A bot that posted a new review covering the fix commits, and did not re-raise a pending finding → `verified: true` on that finding.
+3. A bot that posted nothing this round → `verified: "not_re_reviewed"` on all its pending findings. Silence is not approval: many bots review only once (for example when the PR is marked ready) and never post again after a push. Report these findings as fixed but not re-reviewed by the bot.
 
 Add genuinely new bot findings with `roundFixed: null`, `verified: null`. Update the state file.
 
@@ -307,7 +324,8 @@ Runs after counter-review and before fixes. `fixesThisRound` is true when any fi
 
 - `fixesThisRound` → **not converged**; a verification round follows.
 - Any `ghBotFindings` entry with `verified: false` → **not converged**.
-- Any `ghBotFindings` entry with `verified: null` and `roundFixed != null` → **not converged**; the next round polls bots.
+- Any `ghBotFindings` entry with `verified: null` and `roundFixed != null` → **not converged**; the next round polls bots (or marks them `not_re_reviewed` under `on-ready`).
+- `verified: "not_re_reviewed"` does not block convergence; it is listed in the final report as not re-reviewed.
 - A required reviewer (`require=`) that has not returned `APPROVED` and was not skipped by user decision → **not converged**.
 - Otherwise → **converged**. This includes a clean round 1.
 - Round 5 without convergence → exit with a warning.
@@ -318,12 +336,19 @@ Converged → Phase C. Otherwise continue to Step B6.
 
 Fix all `agree` and `partial` findings with the primary driver's native edit tools.
 
-1. **MUST_FIX first.** Apply the fixes, run each quality gate as a standalone command. All pass and `git -C "${PROJECT_ROOT}" diff --quiet` reports changes → `git -C "${PROJECT_ROOT}" add -A` then `git -C "${PROJECT_ROOT}" commit -m "fix: round ${ROUND} must-fix findings"`. Store the SHA as the checkpoint. A gate fails → stop and notify the user with the gate output.
-2. **SHOULD_FIX and CONSIDER second.** Apply, run gates. Pass → commit `"fix: round ${ROUND} should-fix findings"`. Fail → restore tracked files to the checkpoint with `git -C "${PROJECT_ROOT}" checkout <sha> -- .`, move those findings to `needsYourCall` with the gate output as the reason.
+**Staging.** Track the path of every file the fix batch edited or created. Before committing, run `git -C "${PROJECT_ROOT}" status --porcelain` and compare: a changed path the batch did not touch (a gate's build output, a formatter's side edit) → leave it unstaged and report it. Stage the batch's files by path with `git -C "${PROJECT_ROOT}" add -- <path> <path> ...`. Never `git add -A` or `git add .`.
+
+1. **MUST_FIX first.** Apply the fixes, run each quality gate as a standalone command. All pass and `git -C "${PROJECT_ROOT}" status --porcelain` shows the batch's changes → stage them by path, then `git -C "${PROJECT_ROOT}" commit -m "fix: round ${ROUND} must-fix findings"`. Store the SHA as the checkpoint. A gate fails → stop and notify the user with the gate output.
+2. **SHOULD_FIX and CONSIDER second.** Apply, run gates. Pass → stage by path and commit `"fix: round ${ROUND} should-fix findings"`. Fail → restore tracked files to the checkpoint with `git -C "${PROJECT_ROOT}" checkout <sha> -- .`, move those findings to `needsYourCall` with the gate output as the reason.
 
 After each commit: set `fixCommit` on the findings it resolved, set `roundFixed` and `verified: null` on the matching `ghBotFindings`, and record each finding's source in `actedOnSources` for the next round.
 
-Push: `git -C "${PROJECT_ROOT}" push origin "${BRANCH}"`. Set `pushedSinceLastPoll: true`.
+**Push.** Push once, here, after the round's commits and before the next round starts. Never push while any reviewer is running. Skip the push when:
+
+- `hostRules.push` is `never` → commits stay local; record it and tell the user at finalize.
+- A GitHub review bot is still running on the PR (`gh pr checks "${PR_NUMBER}" --repo "${REPO}"` shows a pending review check, or the bot has posted an "in progress" comment) → wait for it, up to the poll timeout. Still running → skip this round's push, record it, and push at the next round boundary.
+
+Otherwise run `git -C "${PROJECT_ROOT}" push origin "${BRANCH}"` and set `pushedSinceLastPoll: true`. When the push is skipped under `never`, set this round's fixed bot findings to `verified: "not_re_reviewed"`, since no bot will see the fix.
 
 Write the round summary (findings, dispositions, fixes, commits, reviewers engaged and skipped) to `${REVIEW_DIR}/round-${ROUND}-summary-${REVIEW_ID}.md` and post it:
 
@@ -340,15 +365,20 @@ Increment `round`, update the state file, and return to Step B1.
 Read the state file.
 
 1. **Needs your call.** Present every item in `needsYourCall` with the finding, both arguments, and the reviewer. This is the one place the user is asked to decide, and nothing waits on the answer.
-2. **Deferred items → issues.** For each defer item, write the body to `${REVIEW_DIR}/issue-<n>-${REVIEW_ID}.md` and run `gh issue create --title "..." --body-file <path>`. Record the issue URLs.
-3. **Base moved?** If Step A5's base has moved since, report it and offer a rebase; do not rebase silently.
-4. **PR description.** Write the body to `${REVIEW_DIR}/pr-final-${REVIEW_ID}.md`, apply with `gh pr edit --body-file`.
-5. **Final comment.** Status (converged or max rounds), rounds, findings by disposition, Needs your call, issue links. Post with `gh api ... -F "body=@file"`.
-6. **Artifact.** Write `docs/reviews/code-review-${REVIEW_ID}.md`: metadata (id, date, driver, PR, status, options), reviewer registry with independence and per-round engagement, summary metrics, every round's findings, counter-review tables, fixes and commits, GitHub bot verification history, Needs your call with both arguments, deferred items with issue links, and confidence notes for skipped or failed reviewers. Full audit trail, not summaries. Check for sensitive data before writing.
+2. **Deferred items.** Route them by `hostRules.deferrals`:
+   - `report` (default) → list each defer item in the final comment and the result. Create no issues.
+   - `issues` (the user asked, or the project rules say so) → for each defer item, write the body to `${REVIEW_DIR}/issue-<n>-${REVIEW_ID}.md` and run `gh issue create --title "..." --body-file <path>`. Record the issue URLs.
+   - `doc:<path>` → add the items the rules send there (for example feature-sized deferrals to a roadmap doc) with the native edit tool, stage that path only, and commit `"docs: record deferred review items"`. List the rest in the report.
+3. **Unpushed commits.** If commits are still unpushed (a push was skipped at a round boundary) and `hostRules.push` is not `never`, push now, once no reviewer or bot is running. Under `never`, tell the user which commits are local only.
+4. **Base moved?** If Step A5's base has moved since, report it and offer a rebase; do not rebase silently.
+5. **PR description.** Write the body to `${REVIEW_DIR}/pr-final-${REVIEW_ID}.md`, apply with `gh pr edit --body-file`.
+6. **Final comment.** Status (converged or max rounds), rounds, a status table of findings (source, finding, severity, disposition, fix commit, bot verification), Needs your call, deferred items and where they went, and bot findings that were fixed but not re-reviewed. Post with `gh api ... -F "body=@file"`. When no audit file is written, this comment is the record.
+7. **Audit file.** Write `docs/reviews/code-review-${REVIEW_ID}.md` only when a finding was contested (`needsYourCall` is not empty) or `hostRules.auditFile` is `always`. Contents: metadata (id, date, driver, PR, status, options, host rules), reviewer registry with independence and per-round engagement, summary metrics, every round's findings, counter-review tables, fixes and commits, GitHub bot verification history, Needs your call with both arguments, deferred items and where they went, and confidence notes for skipped or failed reviewers. Full audit trail, not summaries. Check for sensitive data before writing. Leave it uncommitted unless the project rules say to commit it.
+8. **Draft PR.** If the PR is a draft, leave it a draft unless `hostRules.markReady` is `agent`; then run `gh pr ready "${PR_NUMBER}" --repo "${REPO}"`. Either way, tell the user that a bot which reviews at ready will post after the PR is marked ready, and that re-running this skill then counter-reviews those comments.
 
 `.review/` is gitignored and every file carries the review id. Leave it in place.
 
-Present the result: status, PR link, artifact path, metrics, and the Needs your call list.
+Present the result: status, PR link and draft state, audit file path (if written), metrics, deferred items, unpushed commits, and the Needs your call list.
 
 ---
 
@@ -357,7 +387,11 @@ Present the result: status, PR link, artifact path, metrics, and the Needs your 
 - Primary driver **critically evaluates** all feedback — counter-review, not compliance
 - Every finding gets a disposition; reject and defer are recorded with both sides and surfaced under Needs your call, never dropped
 - The loop never waits on the user unless `decisions=interactive`
-- Round 1 engages everyone; verification rounds engage only reviewers whose findings were acted on; bots are polled only after a push
+- Read the host project's `CLAUDE.md` / `AGENTS.md` before any git or GitHub choice (draft vs ready, push timing, issues, audit files, staging); follow it where it rules, use the conservative default otherwise
+- New PRs open as drafts by default. Push only between rounds, never while a reviewer or bot is running, and never when the project forbids it
+- Stage fix files by path; never `git add -A` or `git add .`
+- No issues unless the user asks or the project rules say so; no audit file unless a finding was contested or the rules call for one; no agent-name suffix in file names
+- Round 1 engages everyone; verification rounds engage only reviewers whose findings were acted on; bots are polled only after a push, and a bot that stays silent has not re-reviewed — silence is never approval
 - A clean round 1 converges. Every round that commits fixes is followed by a verification round. Max 5 rounds
 - MUST_FIX committed before SHOULD_FIX (safe rollback checkpoint); quality gates after every fix batch, each as a standalone command
 - Rebase once at preflight; report a moved base afterwards, never rebase mid-review

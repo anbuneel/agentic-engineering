@@ -97,7 +97,9 @@ Output files: `${REVIEW_DIR}/claude-review-round-${ROUND}-${REVIEW_ID}.json` and
 3. Set `REVIEW_DIR` to `.review/` in the project root (absolute path). Add `.review/` to `.gitignore` if missing. The directory is created automatically when the primary driver's file-write capability writes the first file into it — do NOT use `mkdir`.
 4. Initialize state file `${REVIEW_DIR}/plan-review-state-${REVIEW_ID}.json` tracking: `reviewId`, `primaryDriver`, `options`, `reviewerRegistry`, `round` (starts at 1), `externalThreadIds`, `planFile`, `findings`, `dispositions`, `needsYourCall`. Write the findings schema to `${REVIEW_DIR}/findings.schema.json`.
 
-   **CRITICAL — Read and update this state file after every major step to guard against context compression. After compaction, the state file is the ONLY reliable source of truth. Always re-read it before acting.**
+   Read and update this state file after every major step. After context compaction it is the only reliable record, so re-read it before acting.
+
+   Read the host project's `CLAUDE.md` and `AGENTS.md` at `PROJECT_ROOT` for rules on review artifacts. Store `auditFile`: `always` if the rules call for a review file, else `contested` (the default). Record where it came from.
 
 5. Read the plan file with the primary driver's file-read capability, write it to `${REVIEW_DIR}/primary-plan-${REVIEW_ID}.md` with the primary driver's file-write capability. If no plan exists in context, ask the user.
 
@@ -107,7 +109,7 @@ Run each available external reviewer from `REVIEWER_REGISTRY` with the round-1 p
 
 ### Step 3: Read Reviews
 
-**At the start of EVERY round, read the state file and restore all variables** (`REVIEW_ID`, `REVIEW_DIR`, `PROJECT_ROOT`, `externalThreadIds`, `round`). After context compaction these values exist ONLY in the state file.
+**At the start of EVERY round, read the state file and restore all variables** (`REVIEW_ID`, `REVIEW_DIR`, `PROJECT_ROOT`, `externalThreadIds`, `round`). After context compaction these values exist only in the state file.
 
 Read every reviewer's findings object from its output file. Compute fingerprints and deduplicate across reviewers as described in [references/findings-schema.md](references/findings-schema.md). Findings already dispositioned in an earlier round (same fingerprint) are not re-evaluated unless the reviewer marks them unresolved. Go to Step 4 with the new findings; if there are none, go straight to Step 5.
 
@@ -154,9 +156,9 @@ Present the counter-review table to the user:
 
 ### Step 7: Write Review Artifact
 
-Write the full review transcript to `docs/reviews/plan-review-${REVIEW_ID}.md`. Create `docs/reviews/` if needed.
+Write `docs/reviews/plan-review-${REVIEW_ID}.md` only when a finding was contested (`needsYourCall` is not empty) or `auditFile` is `always`. Otherwise skip the file and show the status table (finding, disposition, rationale) in Step 8; the full transcript stays in `${REVIEW_DIR}`. Create `docs/reviews/` if needed. No agent-name suffix in the file name.
 
-Include these sections:
+When written, include these sections:
 - **Metadata** — review ID, date, primary driver, options, reviewer registry, status (converged / max rounds), plan file path
 - **Summary metrics** — rounds, findings by disposition (agreed, partial, deferred, rejected)
 - **Each round** — full external reviewer feedback, full counter-review table, revisions applied
@@ -168,7 +170,7 @@ Include these sections:
 
 ### Step 8: Present Final Result
 
-Present status (converged or max rounds), the artifact path, summary metrics, and the Needs your call list. This is the one place the user is asked to decide, and nothing waits on the answer.
+Present status (converged or max rounds), the artifact path (if written) or the status table, summary metrics, and the Needs your call list. This is the one place the user is asked to decide, and nothing waits on the answer.
 
 ### Step 9: Wrap Up
 

@@ -58,12 +58,12 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 
 **How it works:**
 
-1. **Preflight** — clean tree, base branch, quality gates (from the project's `CLAUDE.md`/`AGENTS.md` or detected from the build files), findings schema, one rebase check, PR created if missing
+1. **Preflight** — clean tree, base branch, quality gates (from the project's `CLAUDE.md`/`AGENTS.md` or detected from the build files), findings schema, one rebase check, the host project's git and review rules read from `CLAUDE.md`/`AGENTS.md`, PR created as a draft if missing
 2. **Round 1** — the three lens agents, the cross-family CLI reviewer, and GitHub bot polling run **in parallel**; every reviewer returns one findings object
 3. **Counter-review** — the primary driver dispositions every finding; reject and defer go to **Needs your call** without stopping the loop (`decisions=interactive` to be asked mid-loop instead)
-4. **Fix** — MUST_FIX committed first as a checkpoint, then SHOULD_FIX; quality gates after each batch; push; round summary posted to the PR
-5. **Verification rounds** — only when fixes landed: resume just the reviewers whose findings were acted on, poll bots only after a push, verify GH bot findings by fingerprint
-6. **Finalize** — Needs your call presented, deferred items become GitHub issues, PR description and final comment updated, full audit trail saved to `docs/reviews/`
+4. **Fix** — MUST_FIX committed first as a checkpoint, then SHOULD_FIX; quality gates after each batch; only the changed files are staged; push between rounds when the project allows it, never while a reviewer is running; round summary posted to the PR
+5. **Verification rounds** — only when fixes landed: resume just the reviewers whose findings were acted on, poll bots only after a push, verify GH bot findings by fingerprint; a bot that stays silent counts as not re-reviewed, not as approval
+6. **Finalize** — Needs your call presented, deferred items listed (GitHub issues only when you ask or the project rules say so), PR description and final comment with the status table updated, full audit trail saved to `docs/reviews/` only when a finding was contested
 
 **Counter-review dispositions:**
 
@@ -71,7 +71,7 @@ See a [sample review artifact](docs/examples/code-review-sample.md) to understan
 |-------------|---------|--------|
 | **agree** | Reviewer is right | Fix now |
 | **partial** | Valid but scoped down | Fix the core issue |
-| **defer** | Valid but not now | Needs your call, becomes an issue at finalize |
+| **defer** | Valid but not now | Needs your call, listed at finalize |
 | **reject** | Disagree — must justify | Needs your call, both arguments recorded |
 
 **What makes it different:** Most AI review tools apply all feedback blindly. This one fights back — the primary driver critically evaluates each suggestion before acting, and nothing is silently applied or silently ignored. Because the loop never waits on you, it runs the same way in a terminal, a desktop app worktree, or a background session.
@@ -203,11 +203,11 @@ Background sub-agents for runtimes that support native subagent dispatch. Claude
 
 ### Codebase Snapshot
 
-[`agents/codebase-snapshot.md`](agents/codebase-snapshot.md) — Captures architecture diagram, tech stack, file/line metrics, deployment info, and a timeline of changes since the last snapshot.
+[`agents/codebase-snapshot.md`](agents/codebase-snapshot.md) — Captures architecture diagram, tech stack, file/line metrics (counted with `tokei`, `cloc`, or `git ls-files | xargs wc -l`), deployment info, and a timeline of changes since the last snapshot in `docs/analysis/codebase-snapshot.md`.
 
 ### Code Cleanup Analyst
 
-[`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md) — Scans for dead code, unused imports, deprecated functions, and redundant files. Reports with confidence levels so you can remove code safely.
+[`agents/code-cleanup-analyst.md`](agents/code-cleanup-analyst.md) — Scans the project's source roots (including monorepo `apps/*` and `packages/*`) for dead code, unused imports, deprecated functions, and redundant files. Returns the report as output, with confidence levels so you can remove code safely; it writes no files.
 
 ## Install
 

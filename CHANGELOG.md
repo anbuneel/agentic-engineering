@@ -5,6 +5,25 @@ All notable changes to this project are documented here. Format follows [Keep a 
 ## [Unreleased]
 
 ### Changed
+- `/multi-agent-code-review` reads the host project's `CLAUDE.md` and `AGENTS.md` before every git and GitHub choice and follows them where they rule. Where they are silent it uses the conservative option: new PRs open as drafts, deferred items are listed instead of filed as issues, and `docs/reviews/` gets an audit file only when a finding was contested. Otherwise the final PR comment carries the status table
+- `/multi-agent-code-review` pushes only between rounds, never while a reviewer or GitHub review bot is running, and never when the project forbids agent pushes
+- `/multi-agent-code-review` stages only the files a fix round changed, by path, instead of `git add -A`, matching `/merge`
+- `/multi-agent-plan-review` writes `docs/reviews/plan-review-{id}.md` only when a finding was contested or the project rules call for one
+- `code-cleanup-analyst` returns its report as output instead of writing `docs/code-cleanup-analysis-claude.md`, and scans the project's source roots (monorepo `apps/*` and `packages/*` included) instead of only `src/`
+- `codebase-snapshot` writes `docs/analysis/codebase-snapshot.md` (no agent-name suffix) and counts lines with `tokei`, `cloc`, or `git ls-files | xargs wc -l` instead of reading files
+- Dropped all-caps "CRITICAL" emphasis from the state-file and attachment rules in the multi-agent skills; the reasons stay
+
+### Removed
+- `security-scan`, `security-audit`, and `security-posture` moved from `skills/` to `extras/skills/`. They stay in the repo and are installed by copying a directory, but they are no longer part of the `ae` plugin, which ships the four multi-agent and merge workflows plus the agents
+- The simplification pass at the start of `/multi-agent-code-review`. It committed an unreviewed refactor before any reviewer saw the code and was Claude-only; run `/simplify` separately when wanted
+- `scripts/install-skill-links.ps1`, its Pester tests, and `scripts/check-skill-sync.sh`. Plugin installs are cached and updated by the tools themselves, so per-runtime symlinks and the drift check have nothing left to do
+
+### Added
+- `scripts/Set-PluginVersion.ps1` bumps the version in every plugin manifest before a release
+- `agents/code-reviewer.md`, `agents/silent-failure-hunter.md`, `agents/type-design-analyzer.md` — the three review lenses the multi-agent skills dispatch. They were previously assumed to be Claude Code built-ins, which no longer exist, so the skills silently fell back to the primary driver reviewing itself
+
+### Fixed
+- `/multi-agent-code-review` marked a bot's fixed findings verified when the bot posted nothing ("implicit approval"). Bots that review once, at ready, never post again after a push, so silence is now recorded as "not re-reviewed" and reported
 - Skills moved from `skills/<name>.md` to `skills/<name>/SKILL.md` to follow the Agent Skills specification; each directory name now equals the frontmatter `name`
 - The repo is now a plugin for both Claude Code (`.claude-plugin/`) and Codex (`.codex-plugin/`, `.agents/plugins/`), published as `ae`. One install per machine covers every project, worktree, and the Codex desktop app; Claude Code invokes skills as `/ae:<name>`
 - Reviewer channels are Claude and Codex only. Gemini CLI support was removed from every skill, the docs, and the sample artifact
@@ -18,16 +37,6 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - `/multi-agent-plan-review` follows the same loop shape: reject and defer go to Needs your call instead of a blocking gate (`decisions=interactive` to opt back in), a round with nothing to revise converges instead of always running two rounds, and an advisory reviewer's `REVISE` verdict no longer forces another round; `require=<reviewer>` makes one mandatory
 - Skills no longer delete `.review/`. It is gitignored and every file carries the run id, so the `rm -rf` step and its permission are gone from every skill
 
-### Removed
-- `security-scan`, `security-audit`, and `security-posture` moved from `skills/` to `extras/skills/`. They stay in the repo and are installed by copying a directory, but they are no longer part of the `ae` plugin, which ships the four multi-agent and merge workflows plus the agents
-- The simplification pass at the start of `/multi-agent-code-review`. It committed an unreviewed refactor before any reviewer saw the code and was Claude-only; run `/simplify` separately when wanted
-- `scripts/install-skill-links.ps1`, its Pester tests, and `scripts/check-skill-sync.sh`. Plugin installs are cached and updated by the tools themselves, so per-runtime symlinks and the drift check have nothing left to do
-
-### Added
-- `scripts/Set-PluginVersion.ps1` bumps the version in every plugin manifest before a release
-- `agents/code-reviewer.md`, `agents/silent-failure-hunter.md`, `agents/type-design-analyzer.md` — the three review lenses the multi-agent skills dispatch. They were previously assumed to be Claude Code built-ins, which no longer exist, so the skills silently fell back to the primary driver reviewing itself
-
-### Fixed
 - Agent frontmatter for `codebase-snapshot` and `code-cleanup-analyst` did not parse: the descriptions embedded unquoted `<example>` blocks with `: ` sequences, so every field after `name` was silently dropped at load time and the agents ran with default tools and model. Descriptions are folded block scalars now, and the stale Playwright MCP tool list is gone
 - `/merge` never checked the local target branch against its remote, so a PR branched from a stale target silently carried that target's unpushed commits into the squash — GitHub diffs a PR from its merge-base with the base branch, not from the commit you branched at. Step 1e now counts ahead/behind with `git rev-list --left-right --count`, tests each unpushed commit against the PR head with `merge-base --is-ancestor`, and stops before merging when any of them would be absorbed. Previously the only signal was Step 3's `pull --ff-only` refusing — correct, but after the irreversible merge
 
